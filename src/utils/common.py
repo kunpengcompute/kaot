@@ -1,0 +1,114 @@
+import os
+from typing import Any, Dict, List
+from kaot.utils.log import get_logger
+
+logger = get_logger(__name__)
+
+
+def is_features_config_equal(
+    base_feature_config: Dict[str, Any],
+    target_feature_config: Dict[str, Any],
+    exclude_attrs: list = None,
+) -> bool:
+    exclude_attrs = exclude_attrs or []
+    if not isinstance(base_feature_config, dict) or not isinstance(
+        target_feature_config, dict
+    ):
+        raise TypeError("Both inputs must be dictionaries of feature instances")
+    base_keys = set(base_feature_config.keys())
+    target_keys = set(target_feature_config.keys())
+    if base_keys != target_keys:
+        missing_in_target = base_keys - target_keys
+        missing_in_base = target_keys - base_keys
+        logger.debug(
+            f"Feature name mismatch: \n"
+            f"Missing in target_feature_config: {missing_in_target}\n"
+            f"Missing in base_feature_config: {missing_in_base}"
+        )
+        return False
+
+    for feat_name in base_keys:
+        base_instance = base_feature_config[feat_name]
+        target_instance = target_feature_config[feat_name]
+
+        if not hasattr(base_instance, "__dict__") or not hasattr(
+            target_instance, "__dict__"
+        ):
+            raise TypeError(
+                f"Feature [{feat_name}] value is not a custom class instance"
+            )
+
+        base_attrs = base_instance.__dict__.copy()
+        target_attrs = target_instance.__dict__.copy()
+
+        for attr in exclude_attrs:
+            base_attrs.pop(attr, None)
+            target_attrs.pop(attr, None)
+
+        if base_attrs != target_attrs:
+            logger.debug(
+                f"Feature [{feat_name}] instance mismatch: \n"
+                f"base_feature_config attrs: {base_attrs}\n"
+                f"target_feature_config attrs: {target_attrs}"
+            )
+            return False
+
+    return True
+
+
+def validate_subset(selected: List[str], valid: List[str]):
+    """
+    校验 selected 是否为 valid 的子集。
+    如果 selected 中有元素不在 valid 中，则抛出 ValueError。
+    """
+    invalid = [f for f in selected if f not in valid]
+    if invalid:
+        raise ValueError(
+            f"Invalid features: {invalid}. "
+            f"features {selected} must be a subset of {valid}."
+        )
+    return
+
+
+def build_feature_map(config):
+    feature_map = {}
+    feature_config = config.FEATURES
+
+    for config in feature_config:
+        name = config.name
+        feature_map[name] = config
+
+    return feature_map
+
+
+def get_feature_keys(config):
+    feature_map = build_feature_map(config)
+    name_set = list(feature_map.keys())
+
+    return name_set
+
+
+def validate_yaml_name(file_name):
+    yaml_suffixes = (".yaml", ".yml")
+    if not file_name.lower().endswith(yaml_suffixes):
+        raise RuntimeError(
+            f"file name must be a YAML format file (suffix .yaml or .yml). Current input: {file_name}"
+        )
+
+
+def validate_yaml_path_exist(file_name):
+    current_dir = os.getcwd()
+    output_dir = os.path.join(current_dir, "output")
+    full_file_path = os.path.join(output_dir, file_name)
+
+    if not os.path.isdir(output_dir):
+        raise RuntimeError(
+            f"Output directory not found! Current working directory: {current_dir}\nPlease create the 'output' folder first and place the target file in it"
+        )
+    if not os.path.isfile(full_file_path):
+        raise RuntimeError(
+            f"Configuration file does not exist! Please verify the path: {full_file_path}\n"
+            f"Note: The file must be placed in the 'output' folder of the current directory and have a .yaml/.yml suffix"
+        )
+
+    return full_file_path
