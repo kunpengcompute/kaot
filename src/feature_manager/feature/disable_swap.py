@@ -39,7 +39,7 @@ class DisableSwap(BaseFeature):
                 content = f.read().strip()
                 self.__dict__[key] = int(content)
         config = self.model_dump()
-        logger.debug(f"Feature {self.name} current config yaml is generated")
+        logger.debug(f"Optimization Item {self.name} current config yaml is generated")
         return config
 
     def _apply_config_impl(self):

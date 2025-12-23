@@ -54,7 +54,7 @@ class ConfigHugepages(BaseFeature):
             else:
                 raise RuntimeError("GRUB_CMDLINE_LINUX not found")
         config = self.model_dump()
-        logger.debug(f"Feature {self.name} current config yaml is generated")
+        logger.debug(f"Optimization Item {self.name} current config yaml is generated")
         return config
 
     def _format_hugepage_size(self, size):
