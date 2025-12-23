@@ -99,7 +99,7 @@ def check_features_and_generate_base(args, output_dir):
     if not target_features:
         logger.warning("FEATURES in target_file is empty, skip execute")
         return
-    # 校验target_file是否在已支持的特性中
+    # 校验target_file是否在已支持的调优项中
     validate_subset(target_features, FEATURE_NAMES)
     logger.debug(f"args.features : {args.features}")
     if args.features is not None:
@@ -137,11 +137,11 @@ def update_features_data(
     根据 selected_features 筛选 target_features_data 中的配置。
 
     Args:
-        selected_features: 要筛选的特性名称列表，例如 ["test_feature"]
-        target_features_data: 特性配置字典，key=特性名称，value=特性配置字典
+        selected_features: 要筛选的调优项名称列表，例如 ["test_feature"]
+        target_features_data: 调优项配置字典，key=调优项名称，value=调优项配置字典
                               示例: {"test_feature": {"enable": True, "param": 10}}
     Returns:
-        字典，包含筛选后的特性配置（key=特性名称，value=配置字典）
+        字典，包含筛选后的调优项配置（key=调优项名称，value=配置字典）
     """
     filtered_features = {
         feat_name: config

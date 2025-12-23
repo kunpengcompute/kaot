@@ -45,7 +45,7 @@ def register(subparsers):
         metavar="",
         help="配置文件名称，必选，需为yaml格式，且文件需存在于./output下（如：./output/config.yaml）",
     )
-    # -f 参数：特性名称，可多选
+    # -f 调优项名称，可多选
     parser.add_argument(
         "-f",
         "--features",
@@ -56,7 +56,7 @@ def register(subparsers):
         help=build_help(
             FEATURE_INDEX_CHOICES,
             FEATURE_DESCRIPTION,
-            info="特性名称（输入序号或名称，可多选，逗号分隔，如 -f 1,2）",
+            info="调优项名称（输入序号或名称，可多选，逗号分隔，如 -f 1,2）",
         ),
     )
     # -l 参数：日志级别，仅单选
