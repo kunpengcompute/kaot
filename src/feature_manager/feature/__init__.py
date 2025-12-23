@@ -27,7 +27,6 @@ FEATURE_DESCRIPTION = {}
 ALL_SCENARIO_DESCRIPTION = {
     "boundary_gateway_appliance": "边界网关一体机场景",
     "common": "通用场景",
-    "ssaf": "ssss",
 }
 SCENARIO_DESCRIPTION = {}
 
