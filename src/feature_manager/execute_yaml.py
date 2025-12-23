@@ -97,7 +97,7 @@ def check_features_and_generate_base(args, output_dir):
 
     # 空校验
     if not target_features:
-        logger.warning("FEATURES in target_file is empty, skip execute")
+        logger.warning("OPTIMIZATION_ITEMS in target_file is empty, skip execute")
         return
     # 校验target_file是否在已支持的调优项中
     validate_subset(target_features, FEATURE_NAMES)

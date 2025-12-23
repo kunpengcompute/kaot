@@ -59,7 +59,7 @@ def generate_yaml(features, feature_map, output_dir, generate_type, yaml_path=No
         feature_list.append(config)
         logger.debug(f"Merged Optimization Item: {feat_name}")
     env_cfg = get_environment_info()
-    final_config = TotalConfig(SYSTEM_INFO=env_cfg, FEATURES=feature_list)
+    final_config = TotalConfig(SYSTEM_INFO=env_cfg, OPTIMIZATION_ITEMS=feature_list)
     if yaml_path:
         output_yaml = yaml_path
     else:
@@ -128,7 +128,7 @@ def generate_with_target_and_base(args, output_dir):
         target_map[feature].deploy = deploy
 
     update_target_map = list(target_map.values())
-    target_cfg.FEATURES = update_target_map
+    target_cfg.OPTIMIZATION_ITEMS = update_target_map
     yaml_name = "config_backup.yaml"
     backup_yaml = os.path.join(output_dir, yaml_name)
     output_yaml = backup_and_prepare_output(target_file, backup_yaml)
@@ -170,7 +170,7 @@ def generate_with_target_only(args, output_dir):
             feature_map[feat] = update_config
 
     update_feature_config = list(feature_map.values())
-    target_cfg.FEATURES = update_feature_config
+    target_cfg.OPTIMIZATION_ITEMS = update_feature_config
     yaml_name = "config_backup.yaml"
     backup_yaml = os.path.join(output_dir, yaml_name)
     output_yaml = backup_and_prepare_output(target_file, backup_yaml)
@@ -187,7 +187,7 @@ def generate_with_base_only(args, output_dir):
     base_yaml = args.base_file_name
     base_cfg = load_config(base_yaml)
 
-    feature_config = base_cfg.FEATURES
+    feature_config = base_cfg.OPTIMIZATION_ITEMS
     if not feature_config:
         raise ValueError("No Optimization Item section found in base YAML")
     for fea in feature_config:
