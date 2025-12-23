@@ -37,7 +37,7 @@ def is_features_config_equal(
         missing_in_target = base_keys - target_keys
         missing_in_base = target_keys - base_keys
         logger.debug(
-            f"Feature name mismatch: \n"
+            f"Optimization Item name mismatch: \n"
             f"Missing in target_feature_config: {missing_in_target}\n"
             f"Missing in base_feature_config: {missing_in_base}"
         )
@@ -63,7 +63,7 @@ def is_features_config_equal(
 
         if base_attrs != target_attrs:
             logger.debug(
-                f"Feature [{feat_name}] instance mismatch: \n"
+                f"Optimization Item [{feat_name}] instance mismatch: \n"
                 f"base_feature_config attrs: {base_attrs}\n"
                 f"target_feature_config attrs: {target_attrs}"
             )
@@ -80,8 +80,8 @@ def validate_subset(selected: List[str], valid: List[str]):
     invalid = [f for f in selected if f not in valid]
     if invalid:
         raise ValueError(
-            f"Invalid features: {invalid}. "
-            f"features {selected} must be a subset of {valid}."
+            f"Invalid Optimization Items: {invalid}. "
+            f"Optimization Items {selected} must be a subset of {valid}."
         )
     return
 
