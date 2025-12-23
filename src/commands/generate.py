@@ -30,15 +30,15 @@ SCENARIO_INDEX_CHOICES = {
 }
 
 generate_description = """Usage：
-  1. 根据特性生成配置文件：指定输出文件名称
+  1. 根据调优项生成配置文件：指定输出文件名称
     python src.py generate -f 1,2 -o feature.yaml
   2. 根据场景生成配置文件：指定输出文件名称
     python src.py generate -s 1 -o feature.yaml
-  3. 增减调优配置文件的调优特性：修改原有配置文件
+  3. 增减调优配置文件的调优项：修改原有配置文件
     python src.py generate -tp feature.yaml -af 1,2 -df 3
   4. 修改基线文件deploy值为Y：指定输出文件名称
     python src.py generate -bp base_config.yaml -o target.yaml
-  5. 同步基线文件指定特性配置到特性文件中：修改原有配置文件
+  5. 同步基线文件指定调优项配置到配置文件中：修改原有配置文件
     python src.py generate -bp base_config.yaml -tp target.yaml -f 5
 """
 
@@ -57,7 +57,7 @@ def register(subparsers):
         metavar="",
         help="输出文件名称，可选，需为yaml格式，文件会生成./output下（如：./output/target.yaml）",
     )
-    # -f 参数：特性名称，可多选
+    # -f 参数：调优项名称，可多选
     parser.add_argument(
         "-f",
         "--features",
@@ -68,7 +68,7 @@ def register(subparsers):
         help=build_help(
             FEATURE_INDEX_CHOICES,
             FEATURE_DESCRIPTION,
-            info="特性名称（输入序号或名称，可多选，逗号分隔，如 -f 1,2）",
+            info="调优项名称（输入序号或名称，可多选，逗号分隔，如 -f 1,2）",
         ),
     )
     # -s 参数：场景名称
@@ -101,7 +101,7 @@ def register(subparsers):
         metavar="",
         help="基线文件名称，必选，需为yaml格式，且文件需存在于./output下（如：./output/base.yaml）"
     )
-    # -af 参数：增加特性的名称，可多选
+    # -af 参数：增加调优项的名称，可多选
     parser.add_argument(
         "-af",
         "--add_features",
@@ -109,9 +109,9 @@ def register(subparsers):
         nargs="?",
         const=[],
         metavar="",
-        help=f"增加特性的名称 (允许同时增加多个特性)，可选范围同-f参数",
+        help=f"增加调优项的名称 (允许同时增加多个调优项)，可选范围同-f参数",
     )
-    # -df 参数：删除特性的名称，可多选
+    # -df 参数：删除调优项的名称，可多选
     parser.add_argument(
         "-df",
         "--delete_features",
@@ -119,7 +119,7 @@ def register(subparsers):
         nargs="?",
         const=[],
         metavar="",
-        help=f"删除特性的名称 (允许同时删除多个特性)，可选范围同-f参数",
+        help=f"删除调优项的名称 (允许同时删除多个调优项)，可选范围同-f参数",
     )
     # -l 参数：日志级别，仅单选
     parser.add_argument(
