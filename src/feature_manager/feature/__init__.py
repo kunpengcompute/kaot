@@ -37,7 +37,7 @@ def register_feature(*, scenarios: Optional[List[str]] = None):
         name_default = cls.model_fields["name"].default
         if name_default is None:
             raise ValueError(
-                f"Feature class {cls.__name__} must define default 'name' value"
+                f"Optimization Item class {cls.__name__} must define default 'name' value"
             )
 
         FEATURE_MAP[name_default] = cls

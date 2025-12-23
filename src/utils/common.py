@@ -30,7 +30,7 @@ def is_features_config_equal(
     if not isinstance(base_feature_config, dict) or not isinstance(
         target_feature_config, dict
     ):
-        raise TypeError("Both inputs must be dictionaries of feature instances")
+        raise TypeError("Both inputs must be dictionaries of Optimization Item instances")
     base_keys = set(base_feature_config.keys())
     target_keys = set(target_feature_config.keys())
     if base_keys != target_keys:
@@ -51,7 +51,7 @@ def is_features_config_equal(
             target_instance, "__dict__"
         ):
             raise TypeError(
-                f"Feature [{feat_name}] value is not a custom class instance"
+                f"Optimization Item [{feat_name}] value is not a custom class instance"
             )
 
         base_attrs = base_instance.__dict__.copy()
@@ -64,8 +64,8 @@ def is_features_config_equal(
         if base_attrs != target_attrs:
             logger.debug(
                 f"Optimization Item [{feat_name}] instance mismatch: \n"
-                f"base_feature_config attrs: {base_attrs}\n"
-                f"target_feature_config attrs: {target_attrs}"
+                f"base Optimization Item config attrs: {base_attrs}\n"
+                f"target Optimization Item config attrs: {target_attrs}"
             )
             return False
 

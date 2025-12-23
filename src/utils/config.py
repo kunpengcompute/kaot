@@ -43,7 +43,7 @@ class TotalConfig(BaseModel):
                 raise ValueError(f"[FEATURES[{idx}]] missing 'name' field: {item}")
             name = item["name"]
             if name not in FEATURE_MAP:
-                raise ValueError(f"[FEATURES[{idx}]] unknown feature name '{name}'")
+                raise ValueError(f"[FEATURES[{idx}]] unknown Optimization Item name '{name}'")
             ft_cls = FEATURE_MAP[name]
 
             valid_fields = set(ft_cls.model_fields.keys())

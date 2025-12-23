@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 
 def register(subparsers):
     parser = subparsers.add_parser(
-        "basecfg", help="Generate base feature yaml(all feature)"
+        "basecfg", help="Generate base Optimization Item config yaml(all Optimization Items)"
     )
     # -l 参数：日志级别，仅单选
     parser.add_argument(

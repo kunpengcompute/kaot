@@ -46,7 +46,7 @@ generate_description = """Usage：
 def register(subparsers):
     parser = subparsers.add_parser(
         "generate",
-        help="Generate target feature yaml",
+        help="Generate target Optimization Item config yaml",
         description=generate_description,
         formatter_class=lambda prog: argparse.RawTextHelpFormatter(prog, width=120),
     )
@@ -196,7 +196,7 @@ def validate_features(features, args_name):
         for feat in features:
             if feat not in valid_options:
                 raise RecursionError(
-                    f"Invalid feature '{feat}' for --{args_name}. Valid options are: {', '.join(valid_options)}"
+                    f"Invalid Optimization Item '{feat}' for --{args_name}. Valid options are: {', '.join(valid_options)}"
                 )
             if " " in feat:
                 raise RecursionError(
