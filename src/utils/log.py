@@ -43,11 +43,11 @@ def init_logger(level="INFO", log_file=None):
         datefmt=None,
         reset=True,
         log_colors={
-            'DEBUG': 'cyan',
+            'DEBUG': 'blue',
             'INFO': 'green',
             'WARNING': 'yellow',
             'ERROR':'red',
-            'CRITICAL':'red,bg_white',
+            'CRITICAL':'bold_red',
         },
         secondary_log_colors={},
         style='%'
