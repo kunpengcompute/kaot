@@ -60,14 +60,14 @@ class OvercommitDisableFeature(BaseFeature):
             )
 
         commands = [
-            f"sysctl -w vm.zone_reclaim_mode={zone_reclaim_mode}",
+            ["sysctl", "-w", f"vm.zone_reclaim_mode={zone_reclaim_mode}"],
         ]
         timeout = 10
         for cmd in commands:
-            logger.info(f"Executing: {cmd}")
+            logger.info(f"Executing: {' '.join(cmd)}")
             result = subprocess.run(
                 cmd,
-                shell=True,
+                shell=False,
                 capture_output=True,
                 text=True,
                 timeout=timeout,

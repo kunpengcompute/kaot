@@ -77,20 +77,15 @@ class HugePageDisableFeature(BaseFeature):
                 f"合法值仅支持：{sorted(defrag_list)} "
                 f"（可执行命令 cat /sys/kernel/mm/transparent_hugepage/defrag 查看）"
             )
-        commands = [
-            f"echo {enabled} > /sys/kernel/mm/transparent_hugepage/enabled",
-            f"echo {defrag} > /sys/kernel/mm/transparent_hugepage/defrag",
-        ]
-        timeout = 10
-        for cmd in commands:
-            logger.info(f"Executing: {cmd}")
-            result = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                check=True,
-            )
-            if result.stdout.strip():
-                logger.info(f"Command {cmd} output: {result.stdout.strip()}")
+        paths = {
+            "/sys/kernel/mm/transparent_hugepage/enabled": enabled,
+            "/sys/kernel/mm/transparent_hugepage/defrag": defrag,
+        }
+
+        for path, value in paths.items():
+            logger.info(f"Setting {path} to {value}")
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(str(value))
+            except OSError as io_err:
+                raise OSError(f"Failed to write {value} to {path}") from io_err

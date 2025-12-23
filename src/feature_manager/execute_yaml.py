@@ -57,16 +57,16 @@ def run_execute(args, output_dir):
             try:
                 target_feature.apply_config()
                 logger.info(f"Applied {feat_name} configuration successful.")
-            except Exception as e:
-                logger.error(f"Unexpected error when executing Optimization Item {feat_name}: {str(e)}")
+            except Exception as exec_err:
+                logger.error(f"Unexpected error when executing Optimization Item {feat_name}: {str(exec_err)}")
                 logger.warning(f"Terminating process because Optimization Item '{feat_name}' failed and triggered a rollback.")
                 try:
                     base_feature.deploy = "Y"
                     base_feature.apply_config()
                     logger.debug("Rollback applied successfully.")
-                except Exception as e:
+                except Exception as rollback_err:
                     logger.error(f"Rollback applied failed. You can see you base config in {os.path.abspath(base_yaml)}")
-                    raise RuntimeError(f"Failed to rollback config: {e}")
+                    raise RuntimeError(f"Failed to rollback config: {rollback_err}")
                 logger.info(
                     f"Optimization Item '{feat_name}' failed to execute, but the system has successfully rolled back. "
                     f"Subsequent Optimization Items will not be executed."
