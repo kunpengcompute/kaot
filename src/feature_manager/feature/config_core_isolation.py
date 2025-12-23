@@ -148,7 +148,6 @@ class ConfigCoreIsolation(BaseFeature):
             logger.info(f"Executing: {cmd}")
             result = subprocess.run(
                 cmd,
-                shell=True,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
