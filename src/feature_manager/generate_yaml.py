@@ -33,13 +33,13 @@ logger = get_logger(__name__)
 
 def generate_yaml(features, feature_map, output_dir, generate_type, yaml_path=None):
     if not features:
-        raise ValueError("features cannot be empty")
+        raise ValueError("Optimization Items cannot be empty")
     if not os.path.isdir(output_dir):
         raise FileNotFoundError(f"Output directory does not exist: {output_dir}")
     feature_list = []
     for feat_name in features:
         if feat_name not in feature_map:
-            raise KeyError(f"Feature '{feat_name}' not found in feature_map")
+            raise KeyError(f"Optimization Item '{feat_name}' not found in feature_map")
         feature_cls = feature_map[feat_name]
         feature = feature_cls()
         if generate_type == "target":
@@ -189,7 +189,7 @@ def generate_with_base_only(args, output_dir):
 
     feature_config = base_cfg.FEATURES
     if not feature_config:
-        raise ValueError("No FEATURE section found in base YAML")
+        raise ValueError("No Optimization Item section found in base YAML")
     for fea in feature_config:
         fea.deploy = "Y"
 

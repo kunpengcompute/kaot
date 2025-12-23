@@ -33,7 +33,7 @@ from src.utils.log import init_logger, LOG_LEVEL
 def register(subparsers):
     parser = subparsers.add_parser(
         "execute",
-        help="Execute feature yaml",
+        help="Execute Optimization Item config yaml",
         formatter_class=lambda prog: argparse.RawTextHelpFormatter(prog, width=120),
     )
     # -tp 参数：配置文件路径
