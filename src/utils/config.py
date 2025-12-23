@@ -25,9 +25,9 @@ from src.utils.env import EnvConfig
 
 class TotalConfig(BaseModel):
     SYSTEM_INFO: EnvConfig
-    FEATURES: List[Any]
+    OPTIMIZATION_ITEMS: List[Any]
 
-    @field_validator("FEATURES", mode="before")
+    @field_validator("OPTIMIZATION_ITEMS", mode="before")
     def parse_features(cls, value):
         parsed = []
 
@@ -37,13 +37,13 @@ class TotalConfig(BaseModel):
                 continue
             if not isinstance(item, dict):
                 raise ValueError(
-                    f"[FEATURES[{idx}]] must be dict or Feature instance, got: {type(item)}"
+                    f"[OPTIMIZATION_ITEMS[{idx}]] must be dict or Feature instance, got: {type(item)}"
                 )
             if "name" not in item:
-                raise ValueError(f"[FEATURES[{idx}]] missing 'name' field: {item}")
+                raise ValueError(f"[OPTIMIZATION_ITEMS[{idx}]] missing 'name' field: {item}")
             name = item["name"]
             if name not in FEATURE_MAP:
-                raise ValueError(f"[FEATURES[{idx}]] unknown Optimization Item name '{name}'")
+                raise ValueError(f"[OPTIMIZATION_ITEMS[{idx}]] unknown Optimization Item name '{name}'")
             ft_cls = FEATURE_MAP[name]
 
             valid_fields = set(ft_cls.model_fields.keys())
@@ -51,7 +51,7 @@ class TotalConfig(BaseModel):
             unknown_fields = input_fields - valid_fields
             if unknown_fields:
                 raise ValueError(
-                    f"[FEATURES[{idx}] '{name}'] unknown fields: {unknown_fields}. "
+                    f"[OPTIMIZATION_ITEMS[{idx}] '{name}'] unknown fields: {unknown_fields}. "
                     f"Allowed fields are: {valid_fields}"
                 )
             parsed.append(ft_cls(**item))

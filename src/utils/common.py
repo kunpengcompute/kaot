@@ -88,7 +88,7 @@ def validate_subset(selected: List[str], valid: List[str]):
 
 def build_feature_map(config):
     feature_map = {}
-    feature_config = config.FEATURES
+    feature_config = config.OPTIMIZATION_ITEMS
 
     for config in feature_config:
         name = config.name
