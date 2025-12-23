@@ -18,9 +18,9 @@ from typing import Any, List
 from pydantic import BaseModel, field_validator
 import yaml
 
-from kaot.feature_manager.feature import FEATURE_MAP
-from kaot.feature_manager.feature.base import BaseFeature
-from kaot.utils.env import EnvConfig
+from src.feature_manager.feature import FEATURE_MAP
+from src.feature_manager.feature.base import BaseFeature
+from src.utils.env import EnvConfig
 
 
 class TotalConfig(BaseModel):

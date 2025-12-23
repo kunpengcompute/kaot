@@ -93,7 +93,7 @@ def check_environment_match(config):
     - 一致：打印 info
     - 不一致：raise ValueError，并输出差异信息
     """
-    from kaot.utils.log import get_logger
+    from src.utils.log import get_logger
 
     logger = get_logger(__name__)
 

@@ -17,7 +17,7 @@
 import pkgutil
 import importlib
 from typing import List, Optional, Type, Dict
-from kaot.feature_manager.feature.base import BaseFeature
+from src.feature_manager.feature.base import BaseFeature
 
 
 FEATURE_MAP: Dict[str, Type["BaseFeature"]] = {}

@@ -17,7 +17,7 @@
 import argparse
 import importlib
 import pkgutil
-from kaot.commands import __path__ as commands_path
+from src.commands import __path__ as commands_path
 
 
 def load_commands():
@@ -35,7 +35,7 @@ def load_commands():
     # 遍历 commands 目录下的所有模块（排除 __init__.py）
     for module_info in pkgutil.iter_modules(commands_path):
         module_name = module_info.name  # generate / execute / others
-        module = importlib.import_module(f"kaot.commands.{module_name}")
+        module = importlib.import_module(f"src.commands.{module_name}")
 
         # 必须包含 register() 和 run()
         if hasattr(module, "register") and hasattr(module, "run"):

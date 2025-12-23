@@ -16,9 +16,9 @@
 # ===========================================================================
 import datetime
 import os
-from kaot.feature_manager.generate_yaml import generate_yaml
-from kaot.utils.log import init_logger, get_logger, LOG_LEVEL
-from kaot.feature_manager.feature import FEATURE_MAP, FEATURE_NAMES
+from src.feature_manager.generate_yaml import generate_yaml
+from src.utils.log import init_logger, get_logger, LOG_LEVEL
+from src.feature_manager.feature import FEATURE_MAP, FEATURE_NAMES
 
 logger = get_logger(__name__)
 

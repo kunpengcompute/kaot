@@ -17,12 +17,12 @@
 import argparse
 import datetime
 import os
-from kaot.feature_manager.generate_yaml import run_generate
-from kaot.feature_manager.feature import (
+from src.feature_manager.generate_yaml import run_generate
+from src.feature_manager.feature import (
     FEATURE_DESCRIPTION,
     SCENARIO_DESCRIPTION,
 )
-from kaot.utils.log import init_logger, LOG_LEVEL
+from src.utils.log import init_logger, LOG_LEVEL
 
 FEATURE_INDEX_CHOICES = {str(i + 1): name for i, name in enumerate(FEATURE_DESCRIPTION)}
 SCENARIO_INDEX_CHOICES = {
@@ -31,15 +31,15 @@ SCENARIO_INDEX_CHOICES = {
 
 generate_description = """Usage：
   1. 根据特性生成配置文件：指定输出文件名称
-    python kaot.py generate -f 1,2 -o feature.yaml
+    python src.py generate -f 1,2 -o feature.yaml
   2. 根据场景生成配置文件：指定输出文件名称
-    python kaot.py generate -s 1 -o feature.yaml
+    python src.py generate -s 1 -o feature.yaml
   3. 增减调优配置文件的调优特性：修改原有配置文件
-    python kaot.py generate -tp feature.yaml -af 1,2 -df 3
+    python src.py generate -tp feature.yaml -af 1,2 -df 3
   4. 修改基线文件deploy值为Y：指定输出文件名称
-    python kaot.py generate -bp base_config.yaml -o target.yaml
+    python src.py generate -bp base_config.yaml -o target.yaml
   5. 同步基线文件指定特性配置到特性文件中：修改原有配置文件
-    python kaot.py generate -bp base_config.yaml -tp target.yaml -f 5
+    python src.py generate -bp base_config.yaml -tp target.yaml -f 5
 """
 
 
