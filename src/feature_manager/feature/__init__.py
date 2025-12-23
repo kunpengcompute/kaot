@@ -15,7 +15,7 @@ ALL_SCENARIO_DESCRIPTION = {
 }
 SCENARIO_DESCRIPTION = {}
 
-def register_feature(*, scenarios: Optional[List[str]] = []):
+def register_feature(*, scenarios: Optional[List[str]] = None):
     """Decorator to register feature class with optional scenarios."""
 
     def wrapper(cls):
