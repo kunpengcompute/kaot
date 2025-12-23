@@ -29,17 +29,18 @@ def get_cpu_info() -> str:
     返回: CPU类型字符串
     """
     try:
-        cmd = ["dmidecode -t processor | grep Version"]
+        cmd = ["dmidecode", "-t", "processor"]
         result = subprocess.run(
             cmd,
-            shell = True,
             capture_output=True,
             text=True,
             encoding="utf-8",
             check=True
         )
-        
-        output_lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        output_lines = [
+            line.strip() for line in result.stdout.splitlines()
+            if "Version" in line.strip()
+        ]
         last_line = output_lines[-1]
 
         CPU_TYPE = str(last_line)[16:]
