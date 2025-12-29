@@ -241,7 +241,7 @@ def backup_and_prepare_output(
     new_output_yaml = target_file
 
     # 4. 输出 Warning 日志：提示即将生成新文件并覆盖原 target_file
-    logger.warning(f"Warning: A new configuration file will be generated and overwrite the original target file!")
+    logger.warning(f"A new configuration file will be generated and overwrite the original target file!")
     logger.warning(f"Original file: {os.path.abspath(target_file)}")
     logger.warning(f"Backup file: {os.path.abspath(backup_yaml)}")
     return new_output_yaml
