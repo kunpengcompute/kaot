@@ -22,7 +22,7 @@ python3 kaot.py -h
 # 快速上手
 1. 生成基线文件
 ```python
-python kaot.py basecfg
+python3 kaot.py basecfg
 ```
 基线文件可用于调优项回退，若无需回退，则不需要使用。
 
