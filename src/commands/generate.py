@@ -31,15 +31,15 @@ SCENARIO_INDEX_CHOICES = {
 
 generate_description = """Usage：
   1. 根据调优项生成配置文件：指定输出文件名称
-    python src.py generate -f 1,2 -o feature.yaml
+    python kaot.py generate -f 1,2 -o feature.yaml
   2. 根据场景生成配置文件：指定输出文件名称
-    python src.py generate -s 1 -o feature.yaml
+    python kaot.py generate -s 1 -o feature.yaml
   3. 增减调优配置文件的调优项：修改原有配置文件
-    python src.py generate -tp feature.yaml -af 1,2 -df 3
+    python kaot.py generate -tp feature.yaml -af 1,2 -df 3
   4. 修改基线文件deploy值为Y：指定输出文件名称
-    python src.py generate -bp base_config.yaml -o target.yaml
+    python kaot.py generate -bp base_config.yaml -o target.yaml
   5. 同步基线文件指定调优项配置到配置文件中：修改原有配置文件
-    python src.py generate -bp base_config.yaml -tp target.yaml -f 5
+    python kaot.py generate -bp base_config.yaml -tp target.yaml -f 5
 """
 
 

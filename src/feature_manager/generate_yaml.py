@@ -78,15 +78,19 @@ def run_generate(args, output_dir):
         validate_yaml_name(args.target_file_name)
         args.base_file_name = validate_yaml_path_exist(args.base_file_name)
         args.target_file_name = validate_yaml_path_exist(args.target_file_name)
+        logger.info(f"The base file path is {args.base_file_name}")
+        logger.info(f"The target file path is {args.target_file_name}")
         generate_with_target_and_base(args, output_dir)
     elif args.target_file_name:
         validate_yaml_name(args.target_file_name)
         args.target_file_name = validate_yaml_path_exist(args.target_file_name)
+        logger.info(f"The target file path is {args.target_file_name}")
         generate_with_target_only(args, output_dir)
     elif args.base_file_name:
         validate_output_file_name(args)
         validate_yaml_name(args.base_file_name)
         args.base_file_name = validate_yaml_path_exist(args.base_file_name)
+        logger.info(f"The base file path is {args.base_file_name}")
         generate_with_base_only(args, output_dir)
     elif args.scenario:
         validate_output_file_name(args)
@@ -219,7 +223,7 @@ def generate_with_features_or_scenario(args, output_dir):
 
     logger.info(f"Merged YAML generated at {os.path.abspath(output_yaml)}")
     logger.info(
-        f"All configurations and logs have been saved to: {os.path.abspath(output_dir)}"
+        f"All configurations and logs have been saved to {os.path.abspath(output_dir)}"
     )
     return
 
@@ -229,20 +233,17 @@ def backup_and_prepare_output(
 ):
     try:
         shutil.copy2(target_file, backup_yaml)
-        logger.debug(f"Successfully backed up target file {target_file} to backup: {backup_yaml}")
+        logger.debug(f"Successfully backed up target file {os.path.abspath(target_file)} to backup: {os.path.abspath(backup_yaml)}")
     except Exception as e:
         raise RuntimeError(
-            f"Failed to back up target file! Original file: {target_file}, Backup path: {backup_yaml}, Error: {str(e)}"
+            f"Failed to back up target file! Original file: {os.path.abspath(target_file)}, Backup path: {os.path.abspath(backup_yaml)}, Error: {str(e)}"
         )
     new_output_yaml = target_file
 
     # 4. 输出 Warning 日志：提示即将生成新文件并覆盖原 target_file
-    logger.warning(
-        f"Warning: A new configuration file will be generated and overwrite the original target file!\n"
-        f"Original file: {target_file}\n"
-        f"Backup file: {backup_yaml}\n"
-        f"New file will be saved to: {new_output_yaml}"
-    )
+    logger.warning(f"A new configuration file will be generated and overwrite the original target file!")
+    logger.warning(f"Original file: {os.path.abspath(target_file)}")
+    logger.warning(f"Backup file: {os.path.abspath(backup_yaml)}")
     return new_output_yaml
 
 

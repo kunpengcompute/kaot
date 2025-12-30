@@ -108,6 +108,7 @@ def check_features_and_generate_base(args, output_dir):
     logger.debug(f"Apply Optimization Items : {target_features}")
 
     logger.debug("Starting generation process.")
+    logger.info(f"The target file path is {target_file}")
     base_yaml = generate_yaml(target_features, feature_map, output_dir, "base")
     logger.info(f"Merged base Optimization Item config YAML generated at {os.path.abspath(base_yaml)}")
 
