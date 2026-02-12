@@ -124,7 +124,7 @@ class EnableCPUPerformanceMode(BaseFeature):
         self._update_grub(cpufreq_default_governor=cpufreq_default_governor)
 
         commands = [
-            "grub2-mkconfig -o /boot/grub2/grub.cfg",
+            ["grub2-mkconfig","-o","/boot/grub2/grub.cfg"],
         ]
 
         timeout = 10

@@ -156,7 +156,7 @@ class ConfigCoreIsolation(BaseFeature):
         self._update_grub(isolcpus=isolcpus, nohz_full=nohz_full, rcu_nocbs=rcu_nocbs)
 
         commands = [
-            "grub2-mkconfig -o /boot/grub2/grub.cfg",
+            ["grub2-mkconfig","-o","/boot/grub2/grub.cfg"],
         ]
 
         timeout = 10

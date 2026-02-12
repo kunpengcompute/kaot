@@ -201,17 +201,15 @@ class ConfigHugepages(BaseFeature):
                         )
         self.update_grub_cmdline(hugepagesz=hugepagesz, hugepages=hugepages)
 
-        if hugepagesz in exist_hugepagesz:
-            logger.warning(
-                f"Huge pages with page size {hugepagesz} already exist; no configuration needed."
-            )
-            return
-
         commands = [
-            "grub2-mkconfig -o /boot/grub2/grub.cfg",
-            f"mkdir -p /mnt/kap/huge_{hugepagesz}",
-            f'echo "none /mnt/kap/huge_{hugepagesz} hugetlbfs pagesize={hugepagesz} 0 0" >> /etc/fstab',
+            ["grub2-mkconfig","-o","/boot/grub2/grub.cfg"],
+            ["mkdir","-p",f"/mnt/kap/huge_{hugepagesz}"],
         ]
+        
+        if hugepagesz not in exist_hugepagesz:
+            fstab_entry = f"none /mnt/kap/huge_{hugepagesz} hugetlbfs pagesize={hugepagesz} 0 0"
+            with open("/etc/fstab", "a") as f:
+                f.write(fstab_entry + "\n")
 
         timeout = 10
         for cmd in commands:
