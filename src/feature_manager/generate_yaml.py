@@ -45,19 +45,35 @@ def generate_yaml(features, feature_map, output_dir, generate_type, yaml_path=No
         if generate_type == "target":
             config = feature.generate_config()
             yaml_name = "feature_config.yaml"
+            feature_list.append(config)
+            logger.debug(f"Merged Optimization Item: {feat_name}")
         elif generate_type == "base":
             try:
+                
+                # 自动备份config_path文件
+                if hasattr(feature, "config_path") and getattr(feature, "config_path", None):
+                    config_path = getattr(feature, "config_path")
+                    if os.path.isfile(config_path):
+                        base_name = os.path.basename(config_path)
+                        backup_path = os.path.join(output_dir, base_name + ".bak")
+                        try:
+                            shutil.copy2(config_path, backup_path)
+                            logger.info(f"Config file {config_path} has been backed up to {backup_path}")
+                            feature.config_bak_path = backup_path
+                        except Exception as e:
+                            logger.warning(f"Failed to backup config file {config_path}: {e}")
                 config = feature.get_current_config()
             except Exception as e:
                 logger.error(f"get_current_config failed for {feature.name}")
                 raise RuntimeError(f"Error message blow: {e}")
             yaml_name = "base_config.yaml"
+            if config is not None:
+                feature_list.append(config)
+                logger.debug(f"Merged Optimization Item: {feat_name}")
         else:
             raise ValueError(
                 f"Invalid generate_type: {generate_type}, must be 'target' or 'base'"
             )
-        feature_list.append(config)
-        logger.debug(f"Merged Optimization Item: {feat_name}")
     env_cfg = get_environment_info()
     final_config = TotalConfig(SYSTEM_INFO=env_cfg, OPTIMIZATION_ITEMS=feature_list)
     if yaml_path:
@@ -70,9 +86,10 @@ def generate_yaml(features, feature_map, output_dir, generate_type, yaml_path=No
 
 def run_generate(args, output_dir):
     logger.debug("Starting generation process.")
+    configfile_map = getattr(args, "configfile_map", None)
     if args.features and not args.target_file_name:
         validate_output_file_name(args)
-        generate_with_features_or_scenario(args, output_dir)
+        generate_with_features_or_scenario(args, output_dir, configfile_map)
     elif args.target_file_name and args.base_file_name:
         validate_yaml_name(args.base_file_name)
         validate_yaml_name(args.target_file_name)
@@ -94,7 +111,7 @@ def run_generate(args, output_dir):
         generate_with_base_only(args, output_dir)
     elif args.scenario:
         validate_output_file_name(args)
-        generate_with_features_or_scenario(args, output_dir)
+        generate_with_features_or_scenario(args, output_dir, configfile_map)
     else:
         raise RuntimeError(
             "You must specify one of --features, --scenario, --target_file or --base_file"
@@ -203,7 +220,7 @@ def generate_with_base_only(args, output_dir):
     return
 
 
-def generate_with_features_or_scenario(args, output_dir):
+def generate_with_features_or_scenario(args, output_dir, configfile_map=None):
     logger.info("Operation: generate target_file with Optimization Items.")
     if args.features:
         features = args.features
@@ -217,10 +234,19 @@ def generate_with_features_or_scenario(args, output_dir):
         logger.info(
             f"Detailed tuning items for scenario '{args.scenario}': {' '.join(features)}"
         )
+    # 针对kingbase/opengauss场景，动态设置feature config_path
+    if configfile_map:
+        for feat_name in features:
+            if feat_name in feature_map:
+                feature_cls = feature_map[feat_name]
+                dbtype = feat_name.lower()
+                if dbtype in configfile_map:
+                    # 多实例支持：只取第一个路径（如需多实例可扩展）
+                    path = configfile_map[dbtype][0]
+                    feature_cls.config_path = path
     output_yaml = generate_yaml(
         features, feature_map, output_dir, "target", yaml_path=args.output_file_name
     )
-
     logger.info(f"Merged YAML generated at {os.path.abspath(output_yaml)}")
     logger.info(
         f"All configurations and logs have been saved to {os.path.abspath(output_dir)}"

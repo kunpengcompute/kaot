@@ -24,9 +24,12 @@ FEATURE_MAP: Dict[str, Type["BaseFeature"]] = {}
 FEATURE_NAMES = []
 SCENARIO_FEATURES: dict[str, list[str]] = {}
 FEATURE_DESCRIPTION = {}
+SUPPORTED_APPS = ["kingbase_database", "opengauss_database"]  # 支持对于应用配置文件进行参数调优的应用
 ALL_SCENARIO_DESCRIPTION = {
     "boundary_gateway_appliance": "边界网关一体机场景",
     "common": "通用场景",
+    "opengauss_database": "openGauss数据库场景",
+    "kingbase_database": "金仓数据库场景",
 }
 SCENARIO_DESCRIPTION = {}
 

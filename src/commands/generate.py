@@ -21,7 +21,10 @@ from src.feature_manager.generate_yaml import run_generate
 from src.feature_manager.feature import (
     FEATURE_DESCRIPTION,
     SCENARIO_DESCRIPTION,
+    FEATURE_MAP,
+    SUPPORTED_APPS,
 )
+from src.utils.common import parse_configfile
 from src.utils.log import init_logger, LOG_LEVEL
 
 FEATURE_INDEX_CHOICES = {str(i + 1): name for i, name in enumerate(FEATURE_DESCRIPTION)}
@@ -49,6 +52,17 @@ def register(subparsers):
         help="Generate target Optimization Item config yaml",
         description=generate_description,
         formatter_class=lambda prog: argparse.RawTextHelpFormatter(prog, width=120),
+    )
+    parser.add_argument(
+        "--configfile",
+        type=str,
+        metavar="",
+        help=(
+            "可选参数\n"
+            "格式：应用1：/path1, 应用2：/path2。 示例：kingbase_database:/opt/Kingbase/ES/V8/data/kingbase.conf,opengauss_database:/path2\n"
+            "用逗号分隔多个实例或应用。路径为应用的配置文件路径\n"
+            "当前版本支持 kingbase_database（金仓数据库） 和 opengauss_database(openGauss数据库)"
+        ),
     )
     parser.add_argument(
         "-o",
@@ -150,6 +164,9 @@ def build_help(CHOICES, DESCRIPTION, info=""):
 
 
 def run(args):
+    # 处理--configfile参数，强制opengauss/kingbase场景必须指定
+    scenario_requires_configfile = {"kingbase_database", "opengauss_database"}
+   
     validate_features(args.features, "features")
     validate_features(args.add_features, "add_features")
     validate_features(args.delete_features, "delete_features")
@@ -162,6 +179,16 @@ def run(args):
     # 解析scenario
     if args.scenario:
         args.scenario = normalize_features([args.scenario], SCENARIO_INDEX_CHOICES)[0]
+    configfile_map = parse_configfile(
+        getattr(args, "configfile", None),
+        SUPPORTED_APPS,
+        check_path=True
+    )
+    if args.scenario in scenario_requires_configfile:
+        if not getattr(args, "configfile"):
+            raise ValueError(f"Scenario '{args.scenario}' requires --configfile parameter.")
+    # 将configfile_map挂到args上，供后续generate_yaml使用
+    args.configfile_map = configfile_map
     # 校验依赖关系
     validate_args(args)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -170,7 +197,8 @@ def run(args):
 
     log_path = os.path.join(output_dir, "generate.log")
     init_logger(level=args.log, log_file=log_path)
-    run_generate(args, output_dir)
+    from src.feature_manager import generate_yaml as _gen_yaml_mod
+    _gen_yaml_mod.run_generate(args, output_dir)
 
 
 def validate_args(args):

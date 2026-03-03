@@ -20,6 +20,35 @@ from src.utils.log import get_logger
 
 logger = get_logger(__name__)
 
+def parse_configfile(configfile_str, supported_apps, check_path=True):
+    """
+    通用的--configfile参数解析函数。
+    :param configfile_str: 传入的字符串，如 kingbase_database:/path1,opengauss_database:/path2
+    :param supported_apps: 支持的应用如 kingbase_database、opengauss_database
+    :param check_path: 是否校验路径存在
+    :return: dict，key为类型，value为路径列表
+    """
+    if not configfile_str:
+        return {}
+    result = {}
+    items = [item.strip() for item in configfile_str.split(",") if item.strip()]
+    for item in items:
+        if ":" not in item:
+            msg = f"Invalid --configfile item: {item}, should be type:/path/to/config"
+            logger.warning(msg)
+        dbtype, path = item.split(":", 1)
+        dbtype = dbtype.strip().lower()
+        path = path.strip()
+        if dbtype not in supported_apps:
+            msg = f"Unknown db type '{dbtype}' in --configfile, skip."
+            logger.warning(msg)
+            continue
+        if check_path and not os.path.exists(path):
+            msg = f"Config file path not found: {path}"
+            logger.warning(msg)            
+            continue
+        result.setdefault(dbtype, []).append(path)
+    return result
 
 def is_features_config_equal(
     base_feature_config: Dict[str, Any],
