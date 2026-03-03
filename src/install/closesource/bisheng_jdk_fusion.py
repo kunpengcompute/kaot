@@ -14,9 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===========================================================================
+
 import os
 import subprocess
 from src.utils.log import get_logger
+
+# 全局安装目录配置
+DEST_DIR = "/usr/local/bisheng_jdk_fusion"
 
 logger = get_logger(__name__)
 
@@ -46,16 +50,33 @@ def install_bisheng_jdk_fusion(install_dir):
         return
 
     logger.info("Start installing BiSheng JDK Fusion...")
-    # 查找包含bisheng、fusion、aarch64关键字的tar包
+    # 支持 install_dir 为目录或文件
     tarfile = None
-    for fname in os.listdir(install_dir):
-        if fname.endswith(".tar.gz") and all(k in fname.lower() for k in ["bisheng", "fusion", "aarch64"]):
-            tarfile = fname
-            break
-    if not tarfile:
-        logger.error("No installation package found with keywords 'bisheng', 'fusion', 'aarch64' in the filename.")
+    package_path = None
+    if os.path.isdir(install_dir):
+        # 目录模式，查找tar包
+        for fname in os.listdir(install_dir):
+            if fname.endswith(".tar.gz") and all(k in fname.lower() for k in ["bisheng", "fusion", "aarch64"]):
+                tarfile = fname
+                package_path = os.path.join(install_dir, tarfile)
+                break
+        if not tarfile:
+            logger.error("No installation package found with keywords 'bisheng', 'fusion', 'aarch64' in the filename.")
+            return
+    elif os.path.isfile(install_dir):
+        # 文件模式，直接使用
+        tarfile = os.path.basename(install_dir)
+        package_path = install_dir
+        # 检查文件名关键字
+        if not (tarfile.endswith(".tar.gz") and all(k in tarfile.lower() for k in ["bisheng", "fusion", "aarch64"])):
+            logger.error("Specified file does not match required keywords or extension.")
+            return
+        install_dir = os.path.dirname(install_dir)
+    else:
+        logger.error("install_dir is neither a directory nor a file.")
         return
-    package_path = os.path.join(install_dir, tarfile)
+    # 解压前，记录目录集合
+    before_dirs = set([d for d in os.listdir(install_dir) if os.path.isdir(os.path.join(install_dir, d))])
     # 解压tar包
     try:
         subprocess.run(["tar", "-xzf", tarfile], check=True, cwd=install_dir)
@@ -63,30 +84,25 @@ def install_bisheng_jdk_fusion(install_dir):
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to extract tar package: {e}")
         return
-    # 查找解压后的目录，包含bisheng、fusion、aarch64关键字
-    extracted_dir = None
-    for item in os.listdir(install_dir):
-        if (
-            os.path.isdir(os.path.join(install_dir, item))
-            and all(k in item.lower() for k in ["bisheng", "fusion", "aarch64"])
-        ):
-            extracted_dir = os.path.join(install_dir, item)
-            break
-    if not extracted_dir:
-        logger.error("Extracted directory not found with keywords 'bisheng', 'fusion', 'aarch64'.")
+    # 解压后，记录目录集合
+    after_dirs = set([d for d in os.listdir(install_dir) if os.path.isdir(os.path.join(install_dir, d))])
+    # 新增目录即为解压出的目录
+    new_dirs = list(after_dirs - before_dirs)
+    if not new_dirs:
+        logger.error("No new directory found after extraction.")
         return
-    dest_dir = "/usr/local/bisheng_jdk_fusion"
+    extracted_dir = os.path.join(install_dir, new_dirs[0])
     # 复制到目标目录
     try:
-        subprocess.run(["cp", "-r", extracted_dir, dest_dir], check=True)
-        logger.info(f"Copied JDK Fusion to {dest_dir}.")
+        subprocess.run(["cp", "-r", extracted_dir, DEST_DIR], check=True)
+        logger.info(f"Copied JDK Fusion to {DEST_DIR}.")
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to copy files: {e}")
         return
     # 设置系统级环境变量并持久化到/etc/profile.d/bisheng_jdk_fusion.sh
     profile_d_path = "/etc/profile.d/bisheng_jdk_fusion.sh"
     env_lines = [
-        f'export JAVA_HOME={dest_dir}\n',
+        f'export JAVA_HOME={DEST_DIR}\n',
         'export PATH=$JAVA_HOME/bin:$PATH\n'
     ]
     try:
@@ -118,10 +134,9 @@ def uninstall_bisheng_jdk_fusion():
         logger.error(f"Failed to remove system environment file: {e}")
         return
     # 删除安装目录
-    dest_dir = "/usr/local/bisheng_jdk_fusion"
     try:
-        subprocess.run(["rm", "-rf", dest_dir], check=True)
-        logger.info(f"Removed directory {dest_dir}.")
+        subprocess.run(["rm", "-rf", DEST_DIR], check=True)
+        logger.info(f"Removed directory {DEST_DIR}.")
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to remove directory: {e}")
         return
