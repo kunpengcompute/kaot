@@ -14,36 +14,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===========================================================================
-import subprocess
 import re
 from src.feature_manager.feature import register_feature
 from src.feature_manager.feature.base import BaseFeature
 from src.utils.log import get_logger
+from src.utils.common import run_cmd
 from typing import List
 
 logger = get_logger(__name__)
 
-FEATURE_NAME = "enable_smt2"
+FEATURE_NAME = "check_smt2"
 FEATURE_DES = "启用超线程"
 
 
 @register_feature(scenarios=["boundary_gateway_appliance", "common"])
-class EnableSMT2(BaseFeature):
+class CheckSMT2(BaseFeature):
     name: str = FEATURE_NAME
     SMT2_status: str = 'enable'
 
-    def _run_cmd(self, cmd: List[str], timeout: int = 10, check: bool = True) -> str:
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=check)
-            return result.stdout.strip()
-        except subprocess.TimeoutExpired:
-            raise RuntimeError(f"Command timeout: {' '.join(cmd)}")
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Command failed: {' '.join(cmd)}\nstderr: {e.stderr}")
-
     def get_current_config(self) -> dict:
         self.deploy = "NA"
-        output = self._run_cmd(['lscpu'])
+        output = run_cmd(['lscpu'])
         for line in output.split('\n'):
             if 'Thread(s) per core' in line:
                 per_core = line.split(':')[1].strip()
@@ -83,13 +74,7 @@ class EnableSMT2(BaseFeature):
         if SMT2_status not in valid_statuses:
             raise ValueError(f"参数校验错误: SMT2_status 必须是 '{' 或 '.join(valid_statuses)}'，当前值为 '{SMT2_status}'")
        
-        output = self._run_cmd(['lscpu'])
-        is_new_920_mode = True
-        for line in output.split('\n'):
-            if 'CPU max MHz' in line:
-                value_str = line.split(':')[1].strip()
-                cpu_freq = float(value_str)
-                if cpu_freq <= 2600:
-                    is_new_920_mode = False
+        dmidecode_output = run_cmd(['dmidecode', '-t', '4'], timeout=15)
+        is_new_920_mode = '0xd01' not in dmidecode_output.lower()
 
         self._show_smt_hint(is_new_920_mode)

@@ -15,15 +15,14 @@
 # limitations under the License.
 # ===========================================================================
 import os
-import pdb
 import re
-import subprocess
 import json
 from datetime import datetime
 from typing import Dict, List, Tuple, Set, Optional, Any, Union
 from src.feature_manager.feature import register_feature
 from src.feature_manager.feature.base import BaseFeature
 from src.utils.log import get_logger
+from src.utils.common import run_cmd
 
 logger = get_logger(__name__)
 
@@ -38,27 +37,38 @@ class ConfigNicAffinity(BaseFeature):
     irqbalance_status: str = "disabled"  # enabled | disabled
     nic_policies: Union[Dict[str, str], str] = {}  # 或 = "" 
 
-
     # 内部快照（不暴露给 YAML）
     _current_nic_affinities: Dict[str, Dict[str, str]] = {}  # {nic: {irq_num: cpu_list}}
 
-    def _run_cmd(self, cmd: List[str], timeout: int = 10, check: bool = True) -> str:
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=check)
-            return result.stdout.strip()
-        except subprocess.TimeoutExpired:
-            raise RuntimeError(f"Command timeout: {' '.join(cmd)}")
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Command failed: {' '.join(cmd)}\nstderr: {e.stderr}")
-
     def _is_service_active(self, service_name: str) -> bool:
+        """
+        检查指定 systemd 服务是否处于 active 状态。
+
+        Args:
+            service_name (str): 服务名称，如 'irqbalance'。
+
+        Returns:
+            bool: 如果服务处于 active 状态则返回 True，否则返回 False。
+        """
         try:
-            self._run_cmd(["systemctl", "is-active", service_name], check=True)
+            run_cmd(["systemctl", "is-active", service_name], check=True)
             return True
         except:
             return False
 
     def _parse_cpu_list(self, cpu_str: str) -> List[int]:
+        """
+        将 CPU 列表字符串（如 "0-3,8,10-12"）解析为排序后的整数列表。
+
+        Args:
+            cpu_str (str): CPU 范围字符串，支持逗号分隔和连字符范围。
+
+        Returns:
+            List[int]: 排序后的 CPU 核心编号列表。
+
+        Raises:
+            ValueError: 当输入格式非法（如 start > end）时抛出。
+        """
         cpus = set()
         for part in cpu_str.split(","):
             part = part.strip()
@@ -74,21 +84,51 @@ class ConfigNicAffinity(BaseFeature):
         return sorted(cpus)
 
     def _validate_cpu_range(self, cpus: List[int]):
+        """
+        校验 CPU 编号是否在系统有效范围内。
+
+        Args:
+            cpus (List[int]): 待校验的 CPU 编号列表。
+
+        Raises:
+            RuntimeError: 若任一 CPU 超出 [0, total_cpu_count - 1] 范围。
+        """
         total = os.cpu_count()
         for cpu in cpus:
             if cpu < 0 or cpu >= total:
                 raise RuntimeError(f"CPU {cpu} out of bounds [0, {total - 1}]")
 
     def _get_pcie_from_nic(self, nic: str) -> str:
-        output = self._run_cmd(["ethtool", "-i", nic])
+        """
+        通过 ethtool 获取指定网卡对应的 PCIe 地址（bus-info）。
+
+        Args:
+            nic (str): 网卡名称，如 'eth0'。
+
+        Returns:
+            str: PCIe 地址（如 '0000:18:00.1'）。
+
+        Raises:
+            RuntimeError: 若无法获取 bus-info。
+        """
+        output = run_cmd(["ethtool", "-i", nic])
         match = re.search(r"bus-info:\s*(\S+)", output)
         if not match:
             raise RuntimeError(f"Cannot get bus-info for NIC {nic}")
         return match.group(1)
 
     def _get_numa_node(self, pcie: str) -> int:
+        """
+        通过 lspci 查询指定 PCIe 设备所属的 NUMA 节点。
+
+        Args:
+            pcie (str): PCIe 地址，如 '0000:18:00.1'。
+
+        Returns:
+            int or None: NUMA 节点编号；若查询失败或未找到，返回 None。
+        """
         try:
-            output = self._run_cmd(["lspci", "-vvv", "-s", pcie])
+            output = run_cmd(["lspci", "-vvv", "-s", pcie])
             for line in output.splitlines():
                 if "NUMA node:" in line:
                     # Example: "        NUMA node: 1"
@@ -101,14 +141,32 @@ class ConfigNicAffinity(BaseFeature):
             logger.debug(f"lspci failed to get NUMA for {pcie}: {e}")
 
     def _get_all_up_nics(self) -> List[str]:
+        """
+        获取当前所有处于 UP 状态的网卡列表。
+
+        Returns:
+            List[str]: 网卡名称列表，如 ['eth0', 'enp24s0f1']。
+        """
         nics = []
-        for line in self._run_cmd(["ip", "-br", "link", "show"]).splitlines():
+        for line in run_cmd(["ip", "-br", "link", "show"]).splitlines():
             parts = line.split()
             if len(parts) >= 2 and parts[1] == "UP":
                 nics.append(parts[0])
         return nics
 
     def _get_nic_irqs(self, nic: str) -> List[Tuple[str, str]]:
+        """
+        获取指定网卡关联的数据面中断（IRQ）列表，排除管理/控制面中断。
+
+        Args:
+            nic (str): 网卡名称。
+
+        Returns:
+            List[Tuple[str, str]]: 列表项为 (IRQ编号, 中断名称)，如 [('1627', 'enp24s0f1-TxRx-0')]。
+
+        Raises:
+            RuntimeError: 若无法获取 PCIe 地址。
+        """
         pcie = self._get_pcie_from_nic(nic)
         exclude_keywords = [
             "mlx5_pages_eq", "mlx5_cmd_eq", "mlx5_async",
@@ -118,7 +176,7 @@ class ConfigNicAffinity(BaseFeature):
 
         patterns = [re.escape(nic), re.escape(pcie)]
         try:
-            dmesg = self._run_cmd(["dmesg"])
+            dmesg = run_cmd(["dmesg"])
             for line in dmesg.splitlines():
                 if "renamed" in line and pcie in line:
                     old_name = line.split()[-1]
@@ -143,6 +201,10 @@ class ConfigNicAffinity(BaseFeature):
         return irqs
 
     def _transform_nic_affinity_cpu_range(self):
+        """
+        将内部快照 `_current_nic_affinities` 转换为用户友好的 CPU 范围字符串，
+        并更新到 `nic_policies` 字段中（用于生成配置）。
+        """
         for nic, irq_map in self._current_nic_affinities.items():
             # 收集所有被绑定的CPU核心
             cpus = set()
@@ -182,9 +244,15 @@ class ConfigNicAffinity(BaseFeature):
                 self.nic_policies[nic] = ""
 
     def _get_numa_cpu_ranges(self) -> Dict[int, str]:
+        """
+        解析 lscpu 输出，获取每个 NUMA 节点对应的 CPU 范围。
+
+        Returns:
+            Dict[int, str]: 映射关系，如 {0: '0-31', 1: '32-63'}。
+        """
         numa_cpus = {}
         try:
-            output = self._run_cmd(["lscpu"])
+            output = run_cmd(["lscpu"])
             import re
             for line in output.splitlines():
                 # 匹配 "NUMA node0 CPU(s):    0-31" 这样的行
@@ -199,7 +267,17 @@ class ConfigNicAffinity(BaseFeature):
         return numa_cpus
 
     def get_current_config(self) -> dict:
-        """捕获当前状态用于 restore"""
+        """
+        捕获当前系统的网卡中断绑核状态，用于后续恢复（restore）。
+
+        功能包括：
+        - 检测 irqbalance 服务状态
+        - 获取所有 UP 网卡的 IRQ 及其 smp_affinity_list
+        - 将快照保存为 JSON 文件，并将文件路径赋值给 nic_policies
+
+        Returns:
+            dict: 当前配置的字典表示（通过 Pydantic model_dump 生成）。
+        """
         self.irqbalance_status = "enabled" if self._is_service_active("irqbalance") else "disabled"
         up_nics = self._get_all_up_nics()
         self._current_nic_affinities = {}
@@ -234,6 +312,11 @@ class ConfigNicAffinity(BaseFeature):
         return config
     
     def pre_generate_config(self):
+        """
+        自动生成推荐的网卡绑核策略：
+        - 为每个 UP 网卡分配其所在 NUMA 节点的全部 CPU。
+        - 结果存入 self.nic_policies（格式：{'eth0': '0-31', ...}）。
+        """
         logger.info("Starting NIC policy pre-generation")
         # 获取所有UP状态的网卡
         nic_list = self._get_all_up_nics()
@@ -267,22 +350,37 @@ class ConfigNicAffinity(BaseFeature):
                 continue
         logger.info(f"Generated NIC policies: {self.nic_policies}")
 
+    def generate_config(self) -> Dict[str, Any]:
+        """
+        通用配置生成逻辑
+        :return: 统一格式的配置字典
+        """
+        self.deploy = "Y"
+        self.pre_generate_config()
+
+        config = self.model_dump()
+        logger.debug(f"Optimization Item {self.name} config yaml is generated")
+        return config
+
     def _validate_and_analyze_policies(self) -> Dict[str, Dict[str, List[int]]]:
-        """校验用户输入的 nic_policies
-        
-        支持两种输入格式，返回统一格式：{网卡: {中断号: [CPU列表]}}
-        
-        1. 字典格式1（推荐配置）: 
-            {'eth0': '0-31', 'eth1': '32-63'}
-            -> 转换为: {'eth0': {'all': [0,1,...31]}, 'eth1': {'all': [32,33,...63]}}
-        
-        2. 字典格式2（原始中断映射）:
-            {'enp24s0f1np1': {'1627': '38', '1628': '62,63', '1629': '0-10'}}
-            -> 转换为: {'enp24s0f1np1': {'1627': [38], '1628': [62,63], '1629': [0,1,...10]}}
-        
-        3. 文件路径: 
-            'output/log/nic_affinities/20260212_174523.json'
-            文件内容为格式2
+        """
+        校验并标准化用户输入的 nic_policies 配置。
+
+        支持三种输入形式：
+        1. 字符串：JSON 文件路径（包含详细 IRQ 映射）
+        2. 字典（简化）：{nic: "cpu_range"} → 视为所有 IRQ 绑定相同 CPU
+        3. 字典（详细）：{nic: {irq: "cpu_range"}}
+
+        执行以下校验：
+        - CPU 范围合法性（越界检查）
+        - NUMA 亲和性警告（跨 NUMA 绑定）
+        - CPU 冲突警告（多个 IRQ 共享同一 CPU）
+
+        Returns:
+            Dict[str, Dict[str, List[int]]]: 标准化后的策略，格式为 {nic: {irq: [cpu_ids]}}
+
+        Raises:
+            RuntimeError: 配置格式错误或 CPU 越界。
         """
         total_cpus = os.cpu_count()
         all_used_cpus: Set[int] = set()
@@ -361,7 +459,7 @@ class ConfigNicAffinity(BaseFeature):
                         f"Valid CPU range is 0-{max_cpu_index} (total {total_cpus} CPUs)"
                     )
 
-        # NUMA节点检查
+        # === NUMA 亲和性检查 ===
         for nic, irq_map in parsed.items():
             try:
                 pcie = self._get_pcie_from_nic(nic)
@@ -423,9 +521,18 @@ class ConfigNicAffinity(BaseFeature):
                 raise
 
     def _apply_config_impl(self):
-        irqbalance = self.irqbalance_status
-        if irqbalance:
-            self._run_cmd(["systemctl", "stop", "irqbalance"], check=False)
+        """
+        应用网卡中断绑核配置的核心逻辑。
+
+        步骤：
+        1. 若 irqbalance_status 为真，停止应用绑核
+        2. 解析并校验 nic_policies
+        3. 根据策略绑定每个 IRQ 到指定 CPU
+
+        注意：需以 root 权限运行。
+        """
+        if self.irqbalance_status == "enabled":
+            run_cmd(["systemctl", "restart", "irqbalance"], check=False)
             return
         
         # 校验并分析策略
@@ -433,7 +540,7 @@ class ConfigNicAffinity(BaseFeature):
         logger.info(f"Parsed policies: {parsed_policies}")
 
         # 关闭 irqbalance
-        self._run_cmd(["systemctl", "stop", "irqbalance"], check=False)
+        run_cmd(["systemctl", "stop", "irqbalance"], check=False)
 
         # 应用绑核
         for nic, irq_map in parsed_policies.items():
@@ -463,7 +570,18 @@ class ConfigNicAffinity(BaseFeature):
         logger.info("Multi-NIC IRQ affinity applied successfully.")
 
     def _bind_single_irq(self, irq_num: str, cpu_str: str, nic: str, irq_name: str = ""):
-        """绑定单个IRQ到指定CPU"""
+        """
+        将单个 IRQ 绑定到指定的 CPU 列表。
+
+        Args:
+            irq_num (str): 中断号，如 '1627'
+            cpu_str (str): CPU 列表字符串，如 '32-63' 或 '38,62,63'
+            nic (str): 所属网卡名称
+            irq_name (str): 中断名称（可选，用于日志）
+
+        Raises:
+            RuntimeError: 权限不足或其他写入错误。
+        """
         path = f"/proc/irq/{irq_num}/smp_affinity_list"
         if not os.path.exists(path):
             logger.warning(f"IRQ {irq_num} path not exists, skipped.")

@@ -39,10 +39,6 @@ class BaseFeature(BaseModel):
     def _apply_config_impl(self):
         """根据配置执行生效逻辑"""
         pass
-
-    def pre_generate_config(self):
-        """在generate_config之前执行"""
-        pass
     
     def generate_config(self) -> Dict[str, Any]:
         """
@@ -50,7 +46,6 @@ class BaseFeature(BaseModel):
         :return: 统一格式的配置字典
         """
         self.deploy = "Y"
-        config = self.pre_generate_config()
 
         config = self.model_dump()
         logger.debug(f"Optimization Item {self.name} config yaml is generated")
