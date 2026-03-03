@@ -57,7 +57,7 @@ class DisableSwap(BaseFeature):
                 f"(you can check it with: cat /proc/sys/vm/swappiness)"
             )
         commands = [
-            f"echo {swappiness} > /proc/sys/vm/swappiness",
+            ["sysctl","-w",f"vm.swappiness={swappiness}"],
         ]
         timeout = 10
         for cmd in commands:
