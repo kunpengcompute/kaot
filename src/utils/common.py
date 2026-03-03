@@ -15,6 +15,7 @@
 # limitations under the License.
 # ===========================================================================
 import os
+import subprocess
 from typing import Any, Dict, List
 from src.utils.log import get_logger
 
@@ -157,3 +158,13 @@ def validate_yaml_path_exist(file_name):
         )
 
     return full_file_path
+
+
+def run_cmd(cmd: List[str], timeout: int = 10, check: bool = True) -> str:
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=check)
+            return result.stdout.strip()
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Command timeout: {' '.join(cmd)}")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Command failed: {' '.join(cmd)}\nstderr: {e.stderr}")

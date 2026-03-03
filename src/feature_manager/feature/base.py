@@ -39,7 +39,7 @@ class BaseFeature(BaseModel):
     def _apply_config_impl(self):
         """根据配置执行生效逻辑"""
         pass
-
+    
     def generate_config(self) -> Dict[str, Any]:
         """
         通用配置生成逻辑（所有子类复用，无需修改）

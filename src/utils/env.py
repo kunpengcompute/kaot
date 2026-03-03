@@ -19,6 +19,7 @@ import subprocess
 import psutil
 from typing import Optional
 from pydantic import BaseModel
+from src import VERSION
 
 
 class EnvConfig(BaseModel):
@@ -26,6 +27,7 @@ class EnvConfig(BaseModel):
     cpu: Optional[str] = "NA"
     memory: Optional[str] = "NA"
     uname: Optional[str] = "NA"
+    version: Optional[str] = "NA"
 
     class Config:
         extra = "forbid"
@@ -76,6 +78,10 @@ def get_uname_info() -> str:
     return platform.release()
 
 
+def get_version_info() -> str:
+    return "kaot " + VERSION
+
+
 def get_environment_info() -> EnvConfig:
     """组合各项环境信息生成 EnvConfig"""
     return EnvConfig(
@@ -83,6 +89,7 @@ def get_environment_info() -> EnvConfig:
         cpu=get_cpu_info(),
         memory=get_memory_info(),
         uname=get_uname_info(),
+        version=get_version_info(),
     )
 
 
