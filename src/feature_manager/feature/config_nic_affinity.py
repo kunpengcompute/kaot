@@ -53,7 +53,7 @@ class ConfigNicAffinity(BaseFeature):
         try:
             run_cmd(["systemctl", "is-active", service_name], check=True)
             return True
-        except:
+        except Exception:
             return False
 
     def _parse_cpu_list(self, cpu_str: str) -> List[int]:
@@ -131,7 +131,6 @@ class ConfigNicAffinity(BaseFeature):
             output = run_cmd(["lspci", "-vvv", "-s", pcie])
             for line in output.splitlines():
                 if "NUMA node:" in line:
-                    # Example: "        NUMA node: 1"
                     parts = line.strip().split(":")
                     if len(parts) >= 2:
                         node_str = parts[1].strip()
@@ -181,7 +180,7 @@ class ConfigNicAffinity(BaseFeature):
                 if "renamed" in line and pcie in line:
                     old_name = line.split()[-1]
                     patterns.append(re.escape(old_name))
-        except:
+        except Exception:
             pass
 
         pattern_re = "|".join(patterns)
@@ -253,7 +252,6 @@ class ConfigNicAffinity(BaseFeature):
         numa_cpus = {}
         try:
             output = run_cmd(["lscpu"])
-            import re
             for line in output.splitlines():
                 # 匹配 "NUMA node0 CPU(s):    0-31" 这样的行
                 match = re.match(r'NUMA node(\d+)\s+CPU\(s\):\s+(\S+)', line.strip())
