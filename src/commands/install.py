@@ -18,7 +18,8 @@ import datetime
 import os
 import subprocess
 from src.utils.log import get_logger, init_logger, LOG_LEVEL
-from src.install.closesource.ksl_install import install_boostkit_ksl, uninstall_boostkit_ksl
+from src.install.closesource.boostkit_ksl import install_boostkit_ksl, uninstall_boostkit_ksl
+from src.install.closesource.bisheng_jdk_fusion import install_bisheng_jdk_fusion, uninstall_bisheng_jdk_fusion
 
 logger = get_logger(__name__)
 
@@ -33,10 +34,10 @@ def register(subparsers):
         "--name",
         type=str,
         nargs="+",  # 允许多个值
-        choices=["boostkit_ksl"],  # 可选范围
+        choices=["boostkit_ksl", "bisheng_jdk_fusion"],  # 可选范围
         required=True,
         metavar="",
-        help="加速库名称名称 (可多选)，可选boostkit_ksl",
+        help="加速库名称 (可多选)，可选boostkit_ksl,bisheng_jdk_fusion"
     )
     # -d 参数：指定安装包路径
     parser.add_argument(
@@ -113,15 +114,17 @@ def run(args):
 
 
 # 支持的安装包列表
-install_list = ["boostkit_ksl"]
+install_list = ["boostkit_ksl", "bisheng_jdk_fusion"]
 
 
 install_funcs = {
     "boostkit_ksl": install_boostkit_ksl,
+    "bisheng_jdk_fusion": install_bisheng_jdk_fusion,
 }
 
 uninstall_funcs = {
     "boostkit_ksl": uninstall_boostkit_ksl,
+    "bisheng_jdk_fusion": uninstall_bisheng_jdk_fusion,
 }
 
 auto_download_url_mapping = {
@@ -129,6 +132,7 @@ auto_download_url_mapping = {
 
 manual_download_url_mapping = {
     "boostkit_ksl": "https://www.hikunpeng.com/boostkit/library/detail?subtab=Hyperscan",
+    "bisheng_jdk_fusion": "https://www.hikunpeng.com/zh/developer/devkit/download/exagear",
 
 }
 
