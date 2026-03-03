@@ -14,18 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===========================================================================
+import argparse
 import datetime
 import os
 from src.feature_manager.generate_yaml import generate_yaml
 from src.utils.log import init_logger, get_logger, LOG_LEVEL
-from src.feature_manager.feature import FEATURE_MAP, FEATURE_NAMES
+from src.feature_manager.feature import FEATURE_MAP, FEATURE_NAMES, SUPPORTED_APPS
+from src.utils.common import parse_configfile
 
 logger = get_logger(__name__)
 
 
 def register(subparsers):
     parser = subparsers.add_parser(
-        "basecfg", help="Generate a base configuration file in YAML format containing all Optimization Items."
+        "basecfg", help="Generate a base configuration file in YAML format containing all Optimization Items.",
+        formatter_class=lambda prog: argparse.RawTextHelpFormatter(prog, width=120),
     )
     # -l 参数：日志级别，仅单选
     parser.add_argument(
@@ -38,6 +41,17 @@ def register(subparsers):
         help=f"日志级别 (可选{','.join(LOG_LEVEL)})",
     )
 
+    parser.add_argument(
+        "--configfile",
+        type=str,
+        metavar="",
+        help=(
+            "可选参数\n"
+            "格式：应用1：/path1, 应用2：/path2。 示例：kingbase_database:/opt/Kingbase/ES/V8/data/kingbase.conf,opengauss_database:/path2\n"
+            "用逗号分隔多个实例或应用。路径为应用的配置文件路径\n"
+            "当前版本支持 kingbase_database（金仓数据库） 和 opengauss_database(openGauss数据库)"
+        ),
+    )
     parser.set_defaults(func=run)
 
 
@@ -48,8 +62,34 @@ def run(args):
 
     log_path = os.path.join(output_dir, "basecfg.log")
     init_logger(level=args.log, log_file=log_path)
-    feature_map = FEATURE_MAP
-    features = FEATURE_NAMES
+
+
+    feature_map = FEATURE_MAP.copy()
+    features = FEATURE_NAMES.copy()
+
+    # 处理--configfile参数，优先用用户指定路径，否则用feature实例默认路径
+    configfile_map = parse_configfile(
+        getattr(args, "configfile", None),
+        SUPPORTED_APPS,
+        check_path=False,
+        logger=logger
+    )
+
+    # 始终生成所有feature，但每个feature的config_path优先用用户指定路径，否则用实例默认路径
+    feature_instances = []
+    for name in features:
+        feature_cls = FEATURE_MAP[name]
+        instance = feature_cls()
+        # 如果configfile_map有该类型，优先用用户指定路径
+        config_mapping_apps_name = getattr(instance, "config_mapping_apps_name", name)  # 假设feature类有config_mapping_apps_name属性，否则用name
+        if config_mapping_apps_name in configfile_map and configfile_map[config_mapping_apps_name]:
+            instance.config_path = configfile_map[config_mapping_apps_name][0]
+        # 否则保持实例默认的config_path
+        feature_instances.append(instance)
+
+    # 生成feature_map用于generate_yaml
+    feature_map = {inst.name: type(inst) for inst in feature_instances}
+    features = [inst.name for inst in feature_instances]
 
     output_yaml = generate_yaml(features, feature_map, output_dir, "base")
 
