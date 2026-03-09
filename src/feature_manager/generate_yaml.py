@@ -27,6 +27,7 @@ from src.utils.config import TotalConfig, load_config
 from src.utils.env import get_environment_info
 from src.utils.log import get_logger
 from src.feature_manager.feature import FEATURE_MAP, load_scenario
+from src.feature_manager.feature.base import BaseFeature
 
 logger = get_logger(__name__)
 
@@ -40,8 +41,20 @@ def generate_yaml(features, feature_map, output_dir, generate_type, yaml_path=No
     for feat_name in features:
         if feat_name not in feature_map:
             raise KeyError(f"Optimization Item '{feat_name}' not found in feature_map")
-        feature_cls = feature_map[feat_name]
-        feature = feature_cls()
+
+        obj = feature_map[feat_name]
+        # 支持两种形式：
+        # 1) obj 为 BaseFeature 实例（如从 YAML 反序列化而来）
+        # 2) obj 为特性类（如 FEATURE_MAP 中的类），需要此处进行实例化
+        if isinstance(obj, BaseFeature):
+            feature = obj
+        else:
+            feature_cls = obj
+            feature = feature_cls()
+            # 如果类级别的 config_path 已被外部覆盖（例如 basecfg 传入的自定义路径），
+            # 则在新实例上显式同步该路径，避免 Pydantic 默认值缓存导致仍使用旧路径。
+            if hasattr(feature_cls, "config_path"):
+                setattr(feature, "config_path", getattr(feature_cls, "config_path"))
         if generate_type == "target":
             config = feature.generate_config()
             yaml_name = "feature_config.yaml"
@@ -234,16 +247,32 @@ def generate_with_features_or_scenario(args, output_dir, configfile_map=None):
         logger.info(
             f"Detailed tuning items for scenario '{args.scenario}': {' '.join(features)}"
         )
-    # 针对kingbase/opengauss场景，动态设置feature config_path
+    # 针对 kingbase/opengauss 场景，动态设置 feature config_path
+    # 映射规则：优先使用 feature.config_mapping_apps_name，其次回退为 feat_name.lower()
     if configfile_map:
         for feat_name in features:
-            if feat_name in feature_map:
-                feature_cls = feature_map[feat_name]
+            if feat_name not in feature_map:
+                continue
+            feature_cls = feature_map[feat_name]
+
+            dbtype = None
+            # 尝试通过临时实例读取 config_mapping_apps_name
+            try:
+                tmp_inst = feature_cls()
+                dbtype = getattr(tmp_inst, "config_mapping_apps_name", None)
+            except Exception:
+                dbtype = None
+
+            if not dbtype:
                 dbtype = feat_name.lower()
-                if dbtype in configfile_map:
-                    # 多实例支持：只取第一个路径（如需多实例可扩展）
-                    path = configfile_map[dbtype][0]
-                    feature_cls.config_path = path
+
+            if dbtype in configfile_map and configfile_map[dbtype]:
+                # 多实例支持：当前实现只取第一个路径（如需多实例可扩展）
+                path = configfile_map[dbtype][0]
+                feature_cls.config_path = path
+                logger.info(
+                    f"Feature '{feat_name}' config_path set from --configfile mapping type '{dbtype}': {path}"
+                )
     output_yaml = generate_yaml(
         features, feature_map, output_dir, "target", yaml_path=args.output_file_name
     )

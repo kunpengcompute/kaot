@@ -49,8 +49,8 @@ class OptimizeKingbaseDatabaseConfig(BaseFeature):
     shared_buffers: Optional[str] = _calc_shared_buffers()  # 65%内存，向上取整
     checkpoint_timeout: Optional[str] = "20min"  # 单位min
     bgwriter_delay: Optional[str] = "10ms"  # 单位ms
-    max_wal_size: Optional[str] = "1GB"  # 单位GB
-    max_connections: Optional[int] = 2048  # 连接数
+    max_wal_size: Optional[str] = "300GB"  # 单位GB
+    checkpoint_completion_target: Optional[float] = 0.9  # 0-1之间的小数
 
     def get_current_config(self) -> Optional[dict]:
         self.deploy = "NA"

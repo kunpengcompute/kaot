@@ -105,7 +105,7 @@ class CheckBishengFusionJDKInstalled(BaseFeature):
         jdk_version = config.get("jdk_version", "").lower()
         compatibility = config.get("compatibility", "")
         if jdk_name == "bishengjdk" and jdk_version == "fusion":
-            logger.warning("BiSheng JDK Fusion is already installed. To uninstall, you can run: python kaot.py uninstall -n bisheng_jdk_fusion")
+            logger.warning("BiSheng JDK Fusion is already installed. To uninstall, you can run: python kaot.py install -u -n bisheng_jdk_fusion")
         elif compatibility == COMPATIBLE_STR:
             logger.warning("BiSheng JDK Fusion Version is not installed. Current JDK version is compatible with BiSheng JDK Fusion Version. To install, please run: python kaot.py install -n bisheng_jdk_fusion -d <your_install_package_path>")
         else:

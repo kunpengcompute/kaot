@@ -46,6 +46,24 @@ generate_description = """Usage：
 """
 
 
+def _features_require_configfile(features):
+    """判断当前选择的调优项中，是否包含需要 --configfile 的数据库类调优项。
+
+    规则：如果任意调优项名称（不区分大小写）包含任意 SUPPORTED_APPS 中的应用名
+    （同样不区分大小写，例如 kingbase_database、opengauss_database），则视为需要
+    传入 --configfile。
+    """
+    if not features:
+        return False
+    supported = [app.lower() for app in SUPPORTED_APPS]
+    for feat in features:
+        name = str(feat).lower()
+        for app in supported:
+            if app in name:
+                return True
+    return False
+
+
 def register(subparsers):
     parser = subparsers.add_parser(
         "generate",
@@ -164,9 +182,9 @@ def build_help(CHOICES, DESCRIPTION, info=""):
 
 
 def run(args):
-    # 处理--configfile参数，强制opengauss/kingbase场景必须指定
+    # 处理--configfile参数，强制 opengauss/kingbase 相关场景或调优项必须指定
     scenario_requires_configfile = {"kingbase_database", "opengauss_database"}
-   
+
     validate_features(args.features, "features")
     validate_features(args.add_features, "add_features")
     validate_features(args.delete_features, "delete_features")
@@ -176,17 +194,31 @@ def run(args):
     args.delete_features = normalize_features(
         args.delete_features, FEATURE_INDEX_CHOICES
     )
-    # 解析scenario
+    # 解析 scenario
     if args.scenario:
         args.scenario = normalize_features([args.scenario], SCENARIO_INDEX_CHOICES)[0]
+    # 解析 configfile
+    configfile_str = getattr(args, "configfile", None)
     configfile_map = parse_configfile(
-        getattr(args, "configfile", None),
+        configfile_str,
         SUPPORTED_APPS,
-        check_path=True
-    )
-    if args.scenario in scenario_requires_configfile:
-        if not getattr(args, "configfile"):
-            raise ValueError(f"Scenario '{args.scenario}' requires --configfile parameter.")
+        check_path=True,
+    ) if configfile_str else {}
+
+    # 根据场景 & 调优项判断是否必须传入 --configfile
+    if args.scenario in scenario_requires_configfile and not configfile_str:
+        raise ValueError(
+            f"Scenario '{args.scenario}' requires --configfile parameter. "
+            f"Supported types: {', '.join(sorted(SUPPORTED_APPS))}"
+        )
+
+    # 如果选择的调优项中包含数据库类调优项（如 optimize_kingbase_database_config 等），
+    # 同样强制要求传入 --configfile
+    if _features_require_configfile(args.features) and not configfile_str:
+        raise ValueError(
+            "Selected Optimization Items require --configfile parameter because they are "
+            f"related to: {', '.join(sorted(SUPPORTED_APPS))}."
+        )
     # 将configfile_map挂到args上，供后续generate_yaml使用
     args.configfile_map = configfile_map
     # 校验依赖关系
