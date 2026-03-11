@@ -28,7 +28,7 @@ FEATURE_NAME = "optimize_io_queue_scheduler"
 FEATURE_DES = "优化磁盘IO调度策略"
 
 
-@register_feature(scenarios=["kingbase_database", "opengauss_database"])
+@register_feature(scenarios=["kingbase_database"])
 class OptimizeIOQueueScheduler(BaseFeature):
     name: str = FEATURE_NAME
     io_queue_scheduler: dict = {}  # {disk: scheduler}
@@ -100,7 +100,7 @@ class OptimizeIOQueueScheduler(BaseFeature):
     
     def _apply_config_impl(self) -> dict:
         """
-        只对SSD盘下发IO调度策略到/sys/block/{disk}/queue/scheduler。
+        使用udev规则对SSD盘下发IO调度策略。
         """
         schedulers = self.io_queue_scheduler
         if not schedulers or not isinstance(schedulers, dict):
@@ -109,9 +109,9 @@ class OptimizeIOQueueScheduler(BaseFeature):
                 "status": "error",
                 "message": "Missing or invalid parameter: io_queue_scheduler",
             }
-        results = {}
-        ssd_disks = []
+        
         # 识别SSD盘
+        ssd_disks = []
         for disk in schedulers.keys():
             rotational_path = f"/sys/block/{disk}/queue/rotational"
             try:
@@ -121,48 +121,65 @@ class OptimizeIOQueueScheduler(BaseFeature):
                     ssd_disks.append(disk)
             except Exception:
                 pass
-        # 只对SSD盘下发
+        
+        # 创建udev规则文件
+        udev_rule_path = "/etc/udev/rules.d/io-queue-scheduler.rules"
+        try:
+            with open(udev_rule_path, "w") as f:
+                for disk in ssd_disks:
+                    value = schedulers[disk]
+                    # 写入udev规则
+                    f.write(f'ACTION=="add", KERNEL=="{disk}", ATTR{{queue/scheduler}}="{value}"\n')
+                    f.write(f'ACTION=="change", KERNEL=="{disk}", ATTR{{queue/scheduler}}="{value}"\n')
+            logger.info(f"Udev rules written to {udev_rule_path}")
+        except Exception as e:
+            logger.error(f"Failed to write udev rules to {udev_rule_path}: {e}")
+            return {
+                "status": "error",
+                "message": f"Failed to write udev rules: {e}"
+            }
+        
+        # 重载udev规则
+        try:
+            reload_result = subprocess.run(
+                ["udevadm", "control", "--reload-rules"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            if reload_result.returncode != 0:
+                logger.error(f"Failed to reload udev rules: {reload_result.stderr}")
+                return {
+                    "status": "error",
+                    "message": f"Failed to reload udev rules: {reload_result.stderr}"
+                }
+        except Exception as e:
+            logger.error(f"Exception when reloading udev rules: {e}")
+            return {
+                "status": "error",
+                "message": f"Exception when reloading udev rules: {e}"
+            }
+        
+        # 对当前存在的SSD应用规则
+        results = {}
         for disk in ssd_disks:
             value = schedulers[disk]
-            safe_value = shlex.quote(str(value))
-            cmd = [
-                "bash",
-                "-c",
-                f"echo {safe_value} > /sys/block/{disk}/queue/scheduler",
-            ]
             try:
-                proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
-                if proc.returncode == 0:
-                    logger.info(f"IO scheduler for {disk} set to {value} successfully.")
-                    results[disk] = {"status": "success", "message": f"IO scheduler for {disk} set to {value}"}
+                trigger_result = subprocess.run(
+                    ["udevadm", "trigger", "--name-match=" + disk],
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                if trigger_result.returncode == 0:
+                    logger.info(f"IO scheduler for {disk} set to {value} successfully via udev rule.")
+                    results[disk] = {"status": "success", "message": f"IO scheduler for {disk} set to {value} via udev rule"}
                 else:
-                    logger.error(f"Failed to set IO scheduler for {disk}: {proc.stderr}")
-                    results[disk] = {"status": "error", "message": f"Failed to set IO scheduler for {disk}: {proc.stderr}"}
+                    logger.error(f"Failed to trigger udev rule for {disk}: {trigger_result.stderr}")
+                    results[disk] = {"status": "error", "message": f"Failed to trigger udev rule for {disk}: {trigger_result.stderr}"}
             except Exception as e:
-                logger.error(f"Exception when setting IO scheduler for {disk}: {e}")
+                logger.error(f"Exception when triggering udev rule for {disk}: {e}")
                 results[disk] = {"status": "error", "message": f"Exception: {e}"}
 
-        # 检查SSD盘调度策略是否真的变化
-        unchanged_disks = []
-        for disk in ssd_disks:
-            value = schedulers[disk]
-            path = f"/sys/block/{disk}/queue/scheduler"
-            try:
-                with open(path, "r") as f:
-                    sched_value = f.read().strip()
-                # 当前调度策略用[]包裹
-                current = None
-                for s in sched_value.split():
-                    if s.startswith("[") and s.endswith("]"):
-                        current = s[1:-1]
-                        break
-                if current != str(value):
-                    unchanged_disks.append(disk)
-            except Exception:
-                pass
-        if unchanged_disks:
-            logger.warning(
-                f"Optimization has been executed successfully, but io_queue_scheduler did not change for disks: {', '.join(unchanged_disks)}. Please check if disk io_queue_scheduler policy is locked."
-            )
         return results
       

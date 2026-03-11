@@ -57,24 +57,38 @@ class UpdateIrqBalance(BaseFeature):
         根据输入配置字典中的 status 字段，启动或停止 irqbalance 服务。
         """
         status = self.irq_balance_status
-        command = ""
+        command_start_stop = ""
+        command_enable_disable = ""
 
         if status == "active":
-            command = ["systemctl", "start", "irqbalance"]
+            command_start_stop = ["systemctl", "start", "irqbalance"]
+            command_enable_disable = ["systemctl", "enable", "irqbalance"]
         elif status == "inactive":
-            command = ["systemctl", "stop", "irqbalance"]
+            command_start_stop = ["systemctl", "stop", "irqbalance"]
+            command_enable_disable = ["systemctl", "disable", "irqbalance"]
         else:
             logger.warning("Unknown status: %s", status)
             return {"status": "error", "message": "Unknown status"}
 
         try:
+            # 执行 start/stop 命令
             subprocess.run(
-                command,
+                command_start_stop,
                 capture_output=True,
                 text=True,
                 check=False,
             )
-            logger.info("Command executed successfully: %s", " ".join(command))
+            logger.info("Command executed successfully: %s", " ".join(command_start_stop))
+            
+            # 执行 enable/disable 命令
+            subprocess.run(
+                command_enable_disable,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            logger.info("Command executed successfully: %s", " ".join(command_enable_disable))
+            
             return {"status": "success", "message": f"Service is {status}"}
         except subprocess.CalledProcessError as e:
             logger.exception("Failed to execute command: %s", e)

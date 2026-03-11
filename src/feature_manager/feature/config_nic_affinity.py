@@ -531,6 +531,7 @@ class ConfigNicAffinity(BaseFeature):
         """
         if self.irqbalance_status == "enabled":
             run_cmd(["systemctl", "restart", "irqbalance"], check=False)
+            run_cmd(["systemctl", "enabled", "irqbalance"], check=False)
             return
         
         # 校验并分析策略
@@ -539,6 +540,7 @@ class ConfigNicAffinity(BaseFeature):
 
         # 关闭 irqbalance
         run_cmd(["systemctl", "stop", "irqbalance"], check=False)
+        run_cmd(["systemctl", "disable", "irqbalance"], check=False)
 
         # 应用绑核
         for nic, irq_map in parsed_policies.items():

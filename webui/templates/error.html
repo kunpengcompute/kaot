@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}错误{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="error-icon">
+        <span>&#9888;</span>
+    </div>
+    <h1>出错了</h1>
+    <p class="error-message">{{ message }}</p>
+    <div class="error-actions">
+        <a href="{{ url_for('index') }}" class="btn-primary">返回首页</a>
+        <a href="javascript:history.back()" class="btn-secondary">返回上一页</a>
+    </div>
+</div>
+{% endblock %}

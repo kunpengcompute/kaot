@@ -1,5 +1,3 @@
-# 全局非配置参数key集合
-NON_CONFIG_KEYS = {"name", "config_path", "config_bak_path", "deploy", "config_mapping_apps_name"}
 #!/usr/bin/env python3
 # coding: utf-8
 # Copyright 2025 Huawei Technologies Co., Ltd
@@ -105,19 +103,21 @@ class OptimizeOpenGaussDatabaseConfig(BaseFeature):
     shared_buffers: Optional[str] = _calc_shared_buffers()  # 30%内存，向上取整
 
     def get_current_config(self) -> Optional[dict]:
+        self.deploy = "NA"
         """
         1. 根据config_path找到数据库配置文件
         2. 构建非配置参数列表（name, config_path, config_bak_path）
         3. 其他参数从配置文件查找最后一个值并更新self.__dict__
         若找不到配置文件则返回None
         """
-        self.deploy = "NA"
+        non_config_keys = {"name", "config_path", "config_bak_path", "deploy", "config_mapping_apps_name"}
         config_lines = get_config_file_lines(self.config_path)
         if not config_lines:
-            logger.info(f"Config file {self.config_path} not found, skip this optimization item.")
+            logger.info(f"Config file {self.config_path} not found, skip this optimization item and backup.")
             return None
+        
         for key in self.__dict__:
-            if key in NON_CONFIG_KEYS:
+            if key in non_config_keys:
                 continue
             value = find_last_value_in_config(key, config_lines)
             if value is not None:
@@ -133,14 +133,17 @@ class OptimizeOpenGaussDatabaseConfig(BaseFeature):
             else:
                 self.__dict__[key] = None
         logger.debug(f"Optimization Item {self.name} current config loaded from {self.config_path}")
-        return self.model_dump()
+        config_dict = self.model_dump()
+        # 不在此处将None转为'NA'，直接返回，展示层/序列化时再处理
+        return config_dict
 
     def _apply_config_impl(self) -> dict:
         """
         调用db_config_utils工具写回配置文件。
         """
-        config_dict = {k: v for k, v in self.__dict__.items() if k not in NON_CONFIG_KEYS}
-        success = update_config_file(self.config_path, config_dict, NON_CONFIG_KEYS)
+        non_config_keys = {"name", "config_path", "config_bak_path", "deploy", "config_mapping_apps_name"}
+        config_dict = {k: v for k, v in self.__dict__.items() if k not in non_config_keys}
+        success = update_config_file(self.config_path, config_dict, non_config_keys)
         if success:
             logger.info(f"OpenGauss Config file {self.config_path} updated successfully.")
             logger.warning("Please restart the OpenGauss database to make the new configuration parameters take effect!")

@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}执行任务列表{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>执行任务列表</h1>
+    <p class="subtitle">查看所有执行任务的进度和状态</p>
+</div>
+
+{% if tasks %}
+<div class="tasks-table">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>任务ID</th>
+                <th>类型</th>
+                <th>状态</th>
+                <th>开始时间</th>
+                <th>耗时</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for task in tasks %}
+            <tr class="task-row {% if task.status == 'running' %}running{% elif task.status == 'success' %}success{% elif task.status == 'failed' %}failed{% endif %}">
+                <td>{{ task.task_id }}</td>
+                <td>
+                    {% if task.type == 'generate' %}
+                    <span class="badge badge-info">生成配置</span>
+                    {% elif task.type == 'execute' %}
+                    <span class="badge badge-primary">执行调优</span>
+                    {% elif task.type == 'install' %}
+                    <span class="badge badge-success">安装库</span>
+                    {% elif task.type == 'uninstall' %}
+                    <span class="badge badge-warning">卸载库</span>
+                    {% elif task.type == 'basecfg' %}
+                    <span class="badge badge-secondary">生成基线</span>
+                    {% else %}
+                    <span class="badge">{{ task.type }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if task.status == 'running' %}
+                    <span class="status-running">&#9889; 执行中</span>
+                    {% elif task.status == 'success' %}
+                    <span class="status-success">&#10003; 成功</span>
+                    {% elif task.status == 'failed' %}
+                    <span class="status-failed">&#10007; 失败</span>
+                    {% elif task.status == 'killed' %}
+                    <span class="status-killed">&#9888; 已中止</span>
+                    {% elif task.status == 'error' %}
+                    <span class="status-error">&#10007; 错误</span>
+                    {% else %}
+                    <span>{{ task.status }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ task.start_time | datetime }}</td>
+                <td>
+                    {% if task.end_time %}
+                    {{ (task.end_time - task.start_time) | duration }}
+                    {% else %}
+                    {{ (time.time() - task.start_time) | duration }}
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('logs_page', task_id=task.task_id) }}" class="btn-small">
+                        查看日志
+                    </a>
+                    {% if task.status == 'running' %}
+                    <button class="btn-small btn-danger" onclick="killTask('{{ task.task_id }}')">
+                        中止
+                    </button>
+                    {% elif task.status in ['failed', 'error', 'killed'] %}
+                    <button class="btn-small btn-primary" onclick="retryTask('{{ task.task_id }}')">
+                        重试
+                    </button>
+                    {% endif %}
+                    {% if task.type in ['generate', 'execute'] %}
+                    {% if task.params and task.params.output_file or task.params.target_file %}
+                    <button class="btn-small btn-secondary" onclick="viewTaskConfig('{{ task.task_id }}')">
+                        查看配置
+                    </button>
+                    {% endif %}
+                    {% if task.type == 'generate' and task.params and task.params.configfile %}
+                    <button class="btn-small btn-secondary" onclick="viewDbConfig('{{ task.task_id }}')">
+                        查看数据库配置
+                    </button>
+                    {% elif task.type == 'execute' and task.params and task.params.target_file %}
+                    <button class="btn-small btn-secondary" onclick="viewDbConfig('{{ task.task_id }}')">
+                        查看数据库配置
+                    </button>
+                    {% endif %}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <span class="icon">&#128203;</span>
+    <p>暂无执行任务</p>
+    <a href="{{ url_for('index') }}" class="btn-primary">开始调优</a>
+</div>
+{% endif %}
+
+<div id="config-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-title">配置文件内容</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <textarea id="modal-content" class="code-editor" rows="20" readonly></textarea>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function killTask(taskId) {
+    if (!confirm('确定要中止任务 ' + taskId + ' 吗？')) return;
+    
+    fetch(`/api/kill/${taskId}`, {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('任务已中止');
+            location.reload();
+        } else {
+            alert('中止失败: ' + data.error);
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+    });
+}
+
+function retryTask(taskId) {
+    if (!confirm('确定要重试任务 ' + taskId + ' 吗？')) return;
+    
+    fetch(`/api/retry/${taskId}`, {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+        if (data.task_id) {
+            alert('重试任务已启动');
+            location.href = '/logs/' + data.task_id;
+        } else {
+            alert('重试失败: ' + data.error);
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+    });
+}
+
+function viewTaskConfig(taskId) {
+    fetch(`/api/task/${taskId}/config`)
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            alert('获取配置失败: ' + data.error);
+        } else {
+            showModal('配置文件: ' + data.filename, data.content);
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+    });
+}
+
+function viewDbConfig(taskId) {
+    fetch(`/api/task/${taskId}/dbconfig`)
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            alert('获取数据库配置失败: ' + data.error);
+        } else {
+            showModal('数据库配置文件: ' + data.filename, data.content);
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+    });
+}
+
+function showModal(title, content) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-content').value = content;
+    document.getElementById('config-modal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('config-modal').style.display = 'none';
+}
+
+const time = {time: function() { return Date.now() / 1000; }};
+</script>
+{% endblock %}

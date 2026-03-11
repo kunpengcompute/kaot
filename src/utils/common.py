@@ -16,7 +16,7 @@
 # ===========================================================================
 import os
 import subprocess
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 from src.utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -156,9 +156,10 @@ def validate_yaml_path_exist(file_name):
     return full_file_path
 
 
-def run_cmd(cmd: List[str], timeout: int = 10, check: bool = True) -> str:
+def run_cmd(cmd: Union[str, List[str]], timeout: int = 10, check: bool = True, is_str: bool = False) -> str:
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=check)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=check, shell=is_str)
+            logger.info(f"Command {cmd} output: {result.stdout.strip()}")
             return result.stdout.strip()
         except subprocess.TimeoutExpired:
             raise RuntimeError(f"Command timeout: {' '.join(cmd)}")

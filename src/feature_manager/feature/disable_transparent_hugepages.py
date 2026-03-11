@@ -15,9 +15,11 @@
 # limitations under the License.
 # ===========================================================================
 import re
+import os
 from src.feature_manager.feature import register_feature
 from src.feature_manager.feature.base import BaseFeature
 from src.utils.log import get_logger
+from src.utils.common import run_cmd
 
 logger = get_logger(__name__)
 
@@ -62,29 +64,83 @@ class HugePageDisableFeature(BaseFeature):
         defrag = self.defrag
         enabled_list = ["always", "madvise", "never"]
         defrag_list = ["always", "defer", "defer+madvise", "madvise", "never"]
+        enabled_path = "/sys/kernel/mm/transparent_hugepage/enabled"
+        defrag_path = "/sys/kernel/mm/transparent_hugepage/defrag"
         if enabled not in enabled_list:
             raise RuntimeError(
                 f"透明大页 enabled 配置值非法！"
                 f"当前值：'{enabled}'，"
                 f"合法值仅支持：{sorted(enabled_list)} "
-                f"（可执行命令 cat /sys/kernel/mm/transparent_hugepage/enabled 查看）"
+                f"（可执行命令 cat {enabled_path} 查看）"
             )
         if defrag not in defrag_list:
             raise RuntimeError(
                 f"透明大页 defrag 配置值非法！"
                 f"当前值：'{defrag}'，"
                 f"合法值仅支持：{sorted(defrag_list)} "
-                f"（可执行命令 cat /sys/kernel/mm/transparent_hugepage/defrag 查看）"
+                f"（可执行命令 cat {defrag_path} 查看）"
             )
-        paths = {
-            "/sys/kernel/mm/transparent_hugepage/enabled": enabled,
-            "/sys/kernel/mm/transparent_hugepage/defrag": defrag,
-        }
 
-        for path, value in paths.items():
-            logger.info(f"Setting {path} to {value}")
-            try:
-                with open(path, "w", encoding="utf-8") as f:
-                    f.write(str(value))
-            except OSError as io_err:
-                raise OSError(f"Failed to write {value} to {path}") from io_err
+        SERVICE_PATH = "/etc/systemd/system/kaot.service"
+        if not os.path.exists(SERVICE_PATH):
+            import textwrap
+            template = textwrap.dedent(
+            f"""
+            [Unit]
+            Description=Configure kaot
+            After=multi-user.target
+
+            [Service]
+            Type=oneshot
+            ExecStart=/bin/bash -c "echo {enabled} > {enabled_path}"
+            ExecStart=/bin/bash -c "echo {defrag} > {defrag_path}"
+
+            [Install]
+            WantedBy=multi-user.target
+            """)
+            logger.info(f"{SERVICE_PATH} does not exist. Creating with default content.")
+            with open(SERVICE_PATH, "w", encoding="utf-8") as f:
+                f.write(template)
+        else:
+            import subprocess
+            logger.info(f"{SERVICE_PATH} exists. Modifying as needed.")
+            exec_enabled_line = f'/bin/bash -c "echo {enabled} > {enabled_path}"'
+            exec_defrag_line  = f'/bin/bash -c "echo {defrag} > {defrag_path}"'
+            def line_exists(pattern: str) -> bool:
+                result = subprocess.run(
+                    ["grep", "-qE", pattern, SERVICE_PATH],
+                    capture_output=True
+                )
+                return result.returncode == 0
+
+            def sed_replace(pattern: str, replacement: str):
+                run_cmd(["sed", "-i", f"s|{pattern}|{replacement}|", SERVICE_PATH])
+
+            def sed_append_to_service(line: str):
+                run_cmd(["sed", "-i", f"/\\[Service\\]/a\\{line}", SERVICE_PATH])
+
+            enabled_pattern = f"ExecStart.*{re.escape(enabled_path)}"
+            if line_exists(enabled_pattern):
+                sed_replace(
+                    f"ExecStart.*{enabled_path}.*",
+                    f"ExecStart={exec_enabled_line}"
+                )
+            else:
+                sed_append_to_service(f"ExecStart={exec_enabled_line}")
+
+            defrag_pattern = f"ExecStart.*{re.escape(defrag_path)}"
+            if line_exists(defrag_pattern):
+                sed_replace(
+                    f"ExecStart.*{defrag_path}.*",
+                    f"ExecStart={exec_defrag_line}"
+                )
+            else:
+                sed_append_to_service(f"ExecStart={exec_defrag_line}")
+
+            logger.info(f"{SERVICE_PATH} updated successfully.")
+        run_cmd(["systemctl", "daemon-reload"])
+        run_cmd(["systemctl", "enable", "kaot"])
+        run_cmd(["systemctl", "start", "kaot"])
+
+        logger.info(f"Setting {enabled_path} to {enabled}")
+        logger.info(f"Setting {defrag_path} to {defrag}")

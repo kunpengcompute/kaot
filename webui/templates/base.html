@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}KAOT{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="{{ url_for('index') }}">
+                <span class="logo">KAOT</span>
+                <span class="subtitle">Kunpeng Ascend Optimization Tool</span>
+            </a>
+        </div>
+        <div class="nav-links">
+            <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
+                <span class="icon">&#128187;</span> 场景
+            </a>
+            <a href="{{ url_for('config_page') }}" class="nav-link {% if request.endpoint == 'config_page' %}active{% endif %}">
+                <span class="icon">&#128196;</span> 配置
+            </a>
+            <a href="{{ url_for('library_page') }}" class="nav-link {% if request.endpoint == 'library_page' %}active{% endif %}">
+                <span class="icon">&#128230;</span> 加速库
+            </a>
+            <a href="{{ url_for('tasks_page') }}" class="nav-link {% if request.endpoint == 'tasks_page' %}active{% endif %}">
+                <span class="icon">&#128203;</span> 任务
+            </a>
+        </div>
+    </nav>
+    
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <footer class="footer">
+        <p>KAOT WebUI - Kunpeng Ascend Optimization Tool</p>
+        <p class="footer-version">Version 1.0 | Powered by Flask</p>
+    </footer>
+    
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

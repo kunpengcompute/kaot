@@ -23,11 +23,11 @@ from typing import List
 
 logger = get_logger(__name__)
 
-FEATURE_NAME = "check_smt2"
-FEATURE_DES = "启用超线程"
+FEATURE_NAME = "config_smt2"
+FEATURE_DES = "配置超线程"
 
 
-@register_feature(scenarios=["boundary_gateway_appliance", "common"])
+@register_feature(scenarios=["kingbase_database", "boundary_gateway_appliance", "common"])
 class CheckSMT2(BaseFeature):
     name: str = FEATURE_NAME
     SMT2_status: str = 'enable'
@@ -44,10 +44,16 @@ class CheckSMT2(BaseFeature):
         logger.debug(f"Optimization Item {self.name} current config yaml is generated")
         return config
 
-    def _show_smt_hint(self, is_new_920_mode):
+    def _show_smt_hint(self, is_new_920_mode, SMT2_status):
         """显示SMT配置提示信息"""
         if is_new_920_mode:
-            hint = """
+            # 根据SMT2_status的值确定提示内容
+            if SMT2_status == 'enable':
+                status_text = "设置为 Enabled(开启)"
+            else:
+                status_text = "设置为 Disabled(关闭)"
+            
+            hint = f"""
     ╔══════════════════════════════════════════════════════════╗
     ║                   超线程(SMT)配置指南                    ║
     ╠══════════════════════════════════════════════════════════╣
@@ -56,7 +62,7 @@ class CheckSMT2(BaseFeature):
     ║  3. 选择 Power and Performance Configuration             ║
     ║  4. 选择 CPU PM Control                                  ║
     ║  5. 找到 SMT2 选项                                       ║
-    ║  6. 设置为 Enabled(开启) 或 Disabled(关闭)               ║
+    ║  6. {status_text:<46}  ║
     ║  7. 按 F10 保存并退出                                    ║
     ╚══════════════════════════════════════════════════════════╝
     """
@@ -77,4 +83,4 @@ class CheckSMT2(BaseFeature):
         dmidecode_output = run_cmd(['dmidecode', '-t', '4'], timeout=15)
         is_new_920_mode = '0xd01' not in dmidecode_output.lower()
 
-        self._show_smt_hint(is_new_920_mode)
+        self._show_smt_hint(is_new_920_mode, SMT2_status)

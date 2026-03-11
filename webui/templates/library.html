@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}加速库管理{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>加速库管理</h1>
+    <p class="subtitle">安装和管理鲲鹏BoostKit加速库</p>
+</div>
+
+{% if libraries %}
+<div class="libraries-grid">
+    {% for library in libraries %}
+    <div class="library-card" onclick="location.href='{{ url_for('library_detail_page', name=library.name) }}'">
+        <div class="library-icon">
+            <span class="icon-package">&#128230;</span>
+        </div>
+        <div class="library-info">
+            <h2>{{ library.display_name }}</h2>
+            <p class="library-desc">{{ library.description }}</p>
+            {% if library.manual_download %}
+            <div class="library-meta">
+                <span class="badge badge-warning">需手动下载</span>
+            </div>
+            {% endif %}
+        </div>
+        <div class="library-action">
+            <button class="btn-primary">安装管理</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <span class="icon">&#128230;</span>
+    <p>暂无可用加速库</p>
+</div>
+{% endif %}
+{% endblock %}

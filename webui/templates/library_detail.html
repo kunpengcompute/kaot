@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}{{ library.display_name }} - 安装管理{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ library.display_name }}</h1>
+    <p class="subtitle">{{ library.description }}</p>
+    <div class="header-actions">
+        <a href="{{ url_for('library_page') }}" class="btn-back">&#8592; 返回加速库列表</a>
+    </div>
+</div>
+
+{% if library.manual_download %}
+<div class="warning-box">
+    <strong>注意：</strong> 此加速库需要手动下载安装包
+    <p>下载地址: <a href="{{ library.download_url }}" target="_blank">{{ library.download_url }}</a></p>
+    <p>下载后将安装包放置到指定目录，然后填写目录路径进行安装</p>
+</div>
+{% endif %}
+
+<div class="library-layout">
+    <div class="library-main">
+        <div class="install-section">
+            <h2>安装加速库</h2>
+            <form id="install-form" class="param-form">
+                {% for param in library.params %}
+                <div class="form-group">
+                    <label for="{{ param.name }}">
+                        {{ param.label }}
+                        {% if param.required %}
+                        <span class="required">*</span>
+                        {% endif %}
+                    </label>
+                    
+                    {% if param.description %}
+                    <small class="param-hint">{{ param.description }}</small>
+                    {% endif %}
+                    
+                    <input type="text" name="{{ param.name }}" id="{{ param.name }}"
+                           {% if param.required %}required{% endif %}
+                           {% if param.placeholder %}placeholder="{{ param.placeholder }}"{% endif %}>
+                </div>
+                {% endfor %}
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary btn-large" id="install-btn">
+                        安装
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="uninstall-section">
+            <h2>卸载加速库</h2>
+            <p>如需卸载已安装的加速库，点击下方按钮</p>
+            <button class="btn-danger" onclick="uninstallLibrary()">
+                卸载 {{ library.display_name }}
+            </button>
+        </div>
+        
+        <div class="log-section" id="log-section" style="display: none;">
+            <h3>执行日志</h3>
+            <div class="log-container">
+                <pre id="log-output"></pre>
+            </div>
+            <div class="log-status">
+                <span id="log-status-text">执行中...</span>
+                <button id="kill-btn" class="btn-danger" onclick="killTask()" style="display: none;">
+                    中止执行
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="library-sidebar">
+        <h3>加速库信息</h3>
+        <div class="info-box">
+            <div class="info-item">
+                <label>名称</label>
+                <span>{{ library.name }}</span>
+            </div>
+            {% if library.manual_download %}
+            <div class="info-item">
+                <label>下载方式</label>
+                <span class="badge badge-warning">手动下载</span>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="help-box">
+            <h4>安装说明</h4>
+            <ol>
+                <li>下载安装包</li>
+                <li>填写安装包目录路径</li>
+                <li>点击「安装」按钮</li>
+                <li>查看执行日志</li>
+            </ol>
+        </div>
+        
+        <div class="download-link">
+            <h4>下载链接</h4>
+            <a href="{{ library.download_url }}" target="_blank" class="btn-secondary">
+                &#128229; 下载安装包
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const libraryName = "{{ library.name }}";
+let currentTaskId = null;
+let logPos = 0;
+let logTimer = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('install-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            installLibrary();
+        });
+    }
+});
+
+function installLibrary() {
+    const form = document.getElementById('install-form');
+    const formData = new FormData(form);
+    const installDir = formData.get('install_dir') || formData.get('dir');
+    
+    const installBtn = document.getElementById('install-btn');
+    installBtn.disabled = true;
+    installBtn.textContent = '安装中...';
+    
+    fetch('/api/install', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            library: libraryName,
+            install_dir: installDir
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            alert('安装失败: ' + data.error);
+            installBtn.disabled = false;
+            installBtn.textContent = '安装';
+        } else {
+            currentTaskId = data.task_id;
+            showLogSection();
+            startLogPolling();
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+        installBtn.disabled = false;
+        installBtn.textContent = '安装';
+    });
+}
+
+function uninstallLibrary() {
+    if (!confirm('确定要卸载 ' + libraryName + ' 吗？')) return;
+    
+    fetch('/api/uninstall', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            library: libraryName
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            alert('卸载失败: ' + data.error);
+        } else {
+            currentTaskId = data.task_id;
+            showLogSection();
+            startLogPolling();
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+    });
+}
+
+function showLogSection() {
+    document.getElementById('log-section').style.display = 'block';
+    document.getElementById('log-output').innerHTML = '';
+    document.getElementById('log-status-text').textContent = '执行中...';
+    document.getElementById('kill-btn').style.display = 'inline-block';
+}
+
+function appendLog(text) {
+    const logOutput = document.getElementById('log-output');
+    const coloredContent = parseLogColors(text);
+    logOutput.insertAdjacentHTML('beforeend', coloredContent);
+    logOutput.scrollTop = logOutput.scrollHeight;
+}
+
+function startLogPolling() {
+    logPos = 0;
+    pollLogs();
+}
+
+function pollLogs() {
+    if (!currentTaskId) return;
+    
+    fetch(`/api/logs/${currentTaskId}?pos=${logPos}`)
+    .then(r => r.json())
+    .then(data => {
+        if (data.content) {
+            const logOutput = document.getElementById('log-output');
+            const coloredContent = parseLogColors(data.content);
+            logOutput.insertAdjacentHTML('beforeend', coloredContent);
+            logPos = data.pos;
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+        
+        if (data.status === 'running') {
+            document.getElementById('kill-btn').style.display = 'inline-block';
+            logTimer = setTimeout(pollLogs, 500);
+        } else {
+            document.getElementById('kill-btn').style.display = 'none';
+            finishExecution(data.status);
+        }
+    })
+    .catch(e => {
+        console.error('日志获取失败:', e);
+        logTimer = setTimeout(pollLogs, 1000);
+    });
+}
+
+function finishExecution(status) {
+    const statusText = document.getElementById('log-status-text');
+    const installBtn = document.getElementById('install-btn');
+    
+    if (status === 'success') {
+        statusText.textContent = '执行成功';
+        statusText.className = 'status-success';
+    } else if (status === 'failed') {
+        statusText.textContent = '执行失败';
+        statusText.className = 'status-failed';
+    } else {
+        statusText.textContent = '执行出错';
+        statusText.className = 'status-error';
+    }
+    
+    if (installBtn) {
+        installBtn.disabled = false;
+        installBtn.textContent = '安装';
+    }
+}
+
+function killTask() {
+    if (!currentTaskId) return;
+    
+    fetch(`/api/kill/${currentTaskId}`, {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('log-status-text').textContent = '已中止';
+            document.getElementById('kill-btn').style.display = 'none';
+            clearTimeout(logTimer);
+        } else {
+            alert('中止失败: ' + data.error);
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+    });
+}
+</script>
+{% endblock %}
