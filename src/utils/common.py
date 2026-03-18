@@ -35,30 +35,16 @@ def parse_configfile(configfile_str, supported_apps, check_path=True):
     items = [item.strip() for item in configfile_str.split(",") if item.strip()]
     for item in items:
         if ":" not in item:
-            msg = f"Invalid --configfile item: {item}, should be type:/path/to/config"
-            logger.warning(msg)
+            raise ValueError( f"Invalid --configfile item: {item}, should be type:/path/to/config")
             # 跳过当前项
-            continue
         dbtype, path = item.split(":", 1)
         dbtype = dbtype.strip().lower()
         path = path.strip()
         if dbtype not in supported_apps:
-            msg = f"Unknown db type '{dbtype}' in --configfile. Supported types: {', '.join(sorted(supported_apps))}"
-            logger.warning(msg)
-            continue
+            raise ValueError(f"Unknown db type '{dbtype}' in --configfile. Supported types: {', '.join(sorted(supported_apps))}")
         if check_path and not os.path.exists(path):
-            msg = f"Config file path not found: {path}"
-            logger.warning(msg)
-            continue
+            raise ValueError(f"Config file path not found: {path}")
         result.setdefault(dbtype, []).append(path)
-
-    # 如果用户传入了 --configfile，但所有条目都无效，则认为是配置错误，直接失败
-    if not result:
-        raise ValueError(
-            f"No valid --configfile items parsed from: '{configfile_str}'. "
-            f"Please check type names and paths. Supported types: {', '.join(sorted(supported_apps))}"
-        )
-
     return result
 
 def is_features_config_equal(

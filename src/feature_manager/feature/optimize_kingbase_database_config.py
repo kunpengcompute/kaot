@@ -51,6 +51,7 @@ class OptimizeKingbaseDatabaseConfig(BaseFeature):
     bgwriter_delay: Optional[str] = "10ms"  # 单位ms
     max_wal_size: Optional[str] = "300GB"  # 单位GB
     checkpoint_completion_target: Optional[float] = 0.9  # 0-1之间的小数
+    max_connections: Optional[int] = 2048
 
     def get_current_config(self) -> Optional[dict]:
         self.deploy = "NA"

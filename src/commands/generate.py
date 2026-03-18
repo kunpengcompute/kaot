@@ -197,30 +197,90 @@ def run(args):
     # 解析 scenario
     if args.scenario:
         args.scenario = normalize_features([args.scenario], SCENARIO_INDEX_CHOICES)[0]
-    # 解析 configfile
+   
+   
+    # 根据场景 & 调优项判断是否必须传入 --configfile
+    is_configfile_required = (
+        args.scenario in scenario_requires_configfile
+        or _features_require_configfile(args.features)
+    )
+    
     configfile_str = getattr(args, "configfile", None)
+    # 验证：如果需要configfile但未提供，则报错
+    if is_configfile_required and not configfile_str:
+        if args.scenario in scenario_requires_configfile:
+            raise ValueError(
+                f"Scenario '{args.scenario}' requires --configfile parameter. "
+                f"Supported types: {', '.join(sorted(SUPPORTED_APPS))}"
+            )
+        else:
+            raise ValueError(
+                f"Feature '{', '.join(args.features)}' requires --configfile parameter. "
+                f"Supported types: {', '.join(sorted(SUPPORTED_APPS))}"
+            )
+
+    # 验证：如果提供了configfile但不是必需的，则报错
+    if not is_configfile_required and configfile_str:
+        raise ValueError(
+            "The --configfile parameter is not required for the selected scenario or features. "
+            "Please remove it or select a database-related scenario/feature."
+        )
+
+     # 解析 configfile
     configfile_map = parse_configfile(
         configfile_str,
         SUPPORTED_APPS,
         check_path=True,
     ) if configfile_str else {}
 
-    # 根据场景 & 调优项判断是否必须传入 --configfile
-    if args.scenario in scenario_requires_configfile and not configfile_str:
+    # 验证: 目前不支持多实例场景，验证congfigfile参数只能输入一个并且必须是跟feature/scenario相关的
+    if len(configfile_map) > 1:
         raise ValueError(
-            f"Scenario '{args.scenario}' requires --configfile parameter. "
-            f"Supported types: {', '.join(sorted(SUPPORTED_APPS))}"
+            "Multiple --configfile parameters are not supported in generate mode. "
+            "Please specify only one type of database."
         )
+    
+    # 验证：configfile_map返回的dbtype是否为当前所选scenario或feature名称的子字符串
+    if configfile_map:
+        dbtype = list(configfile_map.keys())[0]  # 获取唯一的数据库类型
+        scenario_or_feature = ""
+        
+        if args.scenario:
+            scenario_or_feature = args.scenario.lower()
+        elif args.features:
+            # 检查所有features是否都包含相同的dbtype
+            for feature in args.features:
+                if dbtype in feature.lower():
+                    break
+            else:
+                raise ValueError(
+                    f"The database type '{dbtype}' in --configfile does not match the selected features/scenario. "
+                    f"The selected features/scenario do not contain '{dbtype}'. Please check your input."
+                )
+        else:
+            # 如果既没有指定scenario也没有指定features，但在之前已经验证了这种情况不会发生
+            pass
 
-    # 如果选择的调优项中包含数据库类调优项（如 optimize_kingbase_database_config 等），
-    # 同样强制要求传入 --configfile
-    if _features_require_configfile(args.features) and not configfile_str:
-        raise ValueError(
-            "Selected Optimization Items require --configfile parameter because they are "
-            f"related to: {', '.join(sorted(SUPPORTED_APPS))}."
-        )
+        # 检查dbtype是否为scenario或feature名称的子字符串
+        if args.scenario and dbtype not in scenario_or_feature:
+            raise ValueError(
+                f"The database type '{dbtype}' in --configfile does not match the selected scenario '{args.scenario}'. "
+                f"'{dbtype}' should be a substring of '{args.scenario}'. Please check your input."
+            )
+        elif args.features:
+            # 检查当前dbtype是否与任何feature名称匹配
+            feature_matches_dbtype = any(dbtype in feature.lower() for feature in args.features)
+            if not feature_matches_dbtype:
+                feature_list = "', '".join(args.features) if args.features else ""
+                raise ValueError(
+                    f"The database type '{dbtype}' in --configfile does not match the selected features '{feature_list}'. Please check your input."
+                )
+
+
+
     # 将configfile_map挂到args上，供后续generate_yaml使用
     args.configfile_map = configfile_map
+
     # 校验依赖关系
     validate_args(args)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
