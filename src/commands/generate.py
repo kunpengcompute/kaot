@@ -46,6 +46,24 @@ generate_description = """Usage：
 """
 
 
+def _features_require_configfile(features):
+    """判断当前选择的调优项中，是否包含需要 --configfile 的数据库类调优项。
+
+    规则：如果任意调优项名称（不区分大小写）包含任意 SUPPORTED_APPS 中的应用名
+    （同样不区分大小写，例如 kingbase_database、opengauss_database），则视为需要
+    传入 --configfile。
+    """
+    if not features:
+        return False
+    supported = [app.lower() for app in SUPPORTED_APPS]
+    for feat in features:
+        name = str(feat).lower()
+        for app in supported:
+            if app in name:
+                return True
+    return False
+
+
 def register(subparsers):
     parser = subparsers.add_parser(
         "generate",
@@ -59,7 +77,7 @@ def register(subparsers):
         metavar="",
         help=(
             "可选参数\n"
-            "格式：应用1：/path1, 应用2：/path2。 示例：kingbase_database:/opt/Kingbase/ES/V8/data/kingbase.conf,opengauss_database:/path2\n"
+            "格式：应用1：/path1, 应用2：/path2。 示例：kingbase_database:/opt/Kingbase/ES/V8/data/kingbase.conf,opengauss_database:/opt/openGuass/data/postgresql.conf\n"
             "用逗号分隔多个实例或应用。路径为应用的配置文件路径\n"
             "当前版本支持 kingbase_database（金仓数据库） 和 opengauss_database(openGauss数据库)"
         ),
@@ -164,9 +182,9 @@ def build_help(CHOICES, DESCRIPTION, info=""):
 
 
 def run(args):
-    # 处理--configfile参数，强制opengauss/kingbase场景必须指定
+    # 处理--configfile参数，强制 opengauss/kingbase 相关场景或调优项必须指定
     scenario_requires_configfile = {"kingbase_database", "opengauss_database"}
-   
+
     validate_features(args.features, "features")
     validate_features(args.add_features, "add_features")
     validate_features(args.delete_features, "delete_features")
@@ -176,19 +194,93 @@ def run(args):
     args.delete_features = normalize_features(
         args.delete_features, FEATURE_INDEX_CHOICES
     )
-    # 解析scenario
+    # 解析 scenario
     if args.scenario:
         args.scenario = normalize_features([args.scenario], SCENARIO_INDEX_CHOICES)[0]
-    configfile_map = parse_configfile(
-        getattr(args, "configfile", None),
-        SUPPORTED_APPS,
-        check_path=True
+   
+   
+    # 根据场景 & 调优项判断是否必须传入 --configfile
+    is_configfile_required = (
+        args.scenario in scenario_requires_configfile
+        or _features_require_configfile(args.features)
     )
-    if args.scenario in scenario_requires_configfile:
-        if not getattr(args, "configfile"):
-            raise ValueError(f"Scenario '{args.scenario}' requires --configfile parameter.")
+    
+    configfile_str = getattr(args, "configfile", None)
+    # 验证：如果需要configfile但未提供，则报错
+    if is_configfile_required and not configfile_str:
+        if args.scenario in scenario_requires_configfile:
+            raise ValueError(
+                f"Scenario '{args.scenario}' requires --configfile parameter. "
+                f"Supported types: {', '.join(sorted(SUPPORTED_APPS))}"
+            )
+        else:
+            raise ValueError(
+                f"Feature '{', '.join(args.features)}' requires --configfile parameter. "
+                f"Supported types: {', '.join(sorted(SUPPORTED_APPS))}"
+            )
+
+    # 验证：如果提供了configfile但不是必需的，则报错
+    if not is_configfile_required and configfile_str:
+        raise ValueError(
+            "The --configfile parameter is not required for the selected scenario or features. "
+            "Please remove it or select a database-related scenario/feature."
+        )
+
+     # 解析 configfile
+    configfile_map = parse_configfile(
+        configfile_str,
+        SUPPORTED_APPS,
+        check_path=True,
+    ) if configfile_str else {}
+
+    # 验证: 目前不支持多实例场景，验证congfigfile参数只能输入一个并且必须是跟feature/scenario相关的
+    if len(configfile_map) > 1:
+        raise ValueError(
+            "Multiple --configfile parameters are not supported in generate mode. "
+            "Please specify only one type of database."
+        )
+    
+    # 验证：configfile_map返回的dbtype是否为当前所选scenario或feature名称的子字符串
+    if configfile_map:
+        dbtype = list(configfile_map.keys())[0]  # 获取唯一的数据库类型
+        scenario_or_feature = ""
+        
+        if args.scenario:
+            scenario_or_feature = args.scenario.lower()
+        elif args.features:
+            # 检查所有features是否都包含相同的dbtype
+            for feature in args.features:
+                if dbtype in feature.lower():
+                    break
+            else:
+                raise ValueError(
+                    f"The database type '{dbtype}' in --configfile does not match the selected features/scenario. "
+                    f"The selected features/scenario do not contain '{dbtype}'. Please check your input."
+                )
+        else:
+            # 如果既没有指定scenario也没有指定features，但在之前已经验证了这种情况不会发生
+            pass
+
+        # 检查dbtype是否为scenario或feature名称的子字符串
+        if args.scenario and dbtype not in scenario_or_feature:
+            raise ValueError(
+                f"The database type '{dbtype}' in --configfile does not match the selected scenario '{args.scenario}'. "
+                f"'{dbtype}' should be a substring of '{args.scenario}'. Please check your input."
+            )
+        elif args.features:
+            # 检查当前dbtype是否与任何feature名称匹配
+            feature_matches_dbtype = any(dbtype in feature.lower() for feature in args.features)
+            if not feature_matches_dbtype:
+                feature_list = "', '".join(args.features) if args.features else ""
+                raise ValueError(
+                    f"The database type '{dbtype}' in --configfile does not match the selected features '{feature_list}'. Please check your input."
+                )
+
+
+
     # 将configfile_map挂到args上，供后续generate_yaml使用
     args.configfile_map = configfile_map
+
     # 校验依赖关系
     validate_args(args)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

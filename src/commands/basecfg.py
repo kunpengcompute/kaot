@@ -47,7 +47,7 @@ def register(subparsers):
         metavar="",
         help=(
             "可选参数\n"
-            "格式：应用1：/path1, 应用2：/path2。 示例：kingbase_database:/opt/Kingbase/ES/V8/data/kingbase.conf,opengauss_database:/path2\n"
+            "格式：应用1：/path1, 应用2：/path2。 示例：kingbase_database:/opt/Kingbase/ES/V8/data/kingbase.conf,opengauss_database:/opt/openGuass/data/postgresql.conf\n"
             "用逗号分隔多个实例或应用。路径为应用的配置文件路径\n"
             "当前版本支持 kingbase_database（金仓数据库） 和 opengauss_database(openGauss数据库)"
         ),
@@ -64,33 +64,32 @@ def run(args):
     init_logger(level=args.log, log_file=log_path)
 
 
-    feature_map = FEATURE_MAP.copy()
-    features = FEATURE_NAMES.copy()
-
-    # 处理--configfile参数，优先用用户指定路径，否则用feature实例默认路径
+    # 处理--configfile参数，优先用用户指定路径，否则用feature默认路径
     configfile_map = parse_configfile(
         getattr(args, "configfile", None),
         SUPPORTED_APPS,
-        check_path=False,
-        logger=logger
+        check_path=True,
     )
 
-    # 始终生成所有feature，但每个feature的config_path优先用用户指定路径，否则用实例默认路径
+    # 方案1：按实例粒度设置 config_path，将实例传入 generate_yaml
     feature_instances = []
-    for name in features:
+    for name in FEATURE_NAMES:
         feature_cls = FEATURE_MAP[name]
         instance = feature_cls()
-        # 如果configfile_map有该类型，优先用用户指定路径
-        config_mapping_apps_name = getattr(instance, "config_mapping_apps_name", name)  # 假设feature类有config_mapping_apps_name属性，否则用name
-        if config_mapping_apps_name in configfile_map and configfile_map[config_mapping_apps_name]:
-            instance.config_path = configfile_map[config_mapping_apps_name][0]
-        # 否则保持实例默认的config_path
+
+        # 根据实例上的 config_mapping_apps_name 找到对应的应用类型映射
+        config_mapping_apps_name = getattr(instance, "config_mapping_apps_name", name)
+        user_paths = configfile_map.get(config_mapping_apps_name)
+        if user_paths and user_paths[0]:
+            instance.config_path = user_paths[0]
+            logger.info(
+                f"Feature '{name}' instance config_path set to user value: {user_paths[0]}"
+            )
+
         feature_instances.append(instance)
 
-    # 生成feature_map用于generate_yaml
-    feature_map = {inst.name: type(inst) for inst in feature_instances}
+    feature_map = {inst.name: inst for inst in feature_instances}
     features = [inst.name for inst in feature_instances]
-
     output_yaml = generate_yaml(features, feature_map, output_dir, "base")
 
     logger.info(f"Merged YAML generated at {os.path.abspath(output_yaml)}")

@@ -123,7 +123,7 @@ class CheckBoostKitHyperscanInstalled(BaseFeature):
             }
         else:
             logger.warning(
-                "To uninstall the KSL package, please run: kaot install -u -n boostkit_ksl"
+                "To uninstall the KSL package, please run: kaot uninstall -n boostkit_ksl"
             )
             logger.warning(
                 "To compile native Hyperscan, use the v5.4.2.aarch64.zip file from the directory specified by the -d parameter when you previously ran hyperscan.sh."
@@ -135,7 +135,7 @@ class CheckBoostKitHyperscanInstalled(BaseFeature):
                 "status": "success",
                 "message": (
                     "BoostKit KSL is installed. "
-                    "To uninstall, run 'kaot install -u -n boostkit_ksl'. "
+                    "To uninstall, run 'kaot uninstall -n boostkit_ksl'. "
                     "To build native Hyperscan, use the v5.4.2.aarch64.zip from your previous -d directory, "
                     f"or from '{os.path.abspath(install_dir)}/install_files' if not specified."
                 ),

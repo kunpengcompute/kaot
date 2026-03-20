@@ -18,8 +18,8 @@ import datetime
 import os
 import subprocess
 from src.utils.log import get_logger, init_logger, LOG_LEVEL
-from src.install.closesource.boostkit_ksl import install_boostkit_ksl, uninstall_boostkit_ksl
-from src.install.closesource.bisheng_jdk_fusion import install_bisheng_jdk_fusion, uninstall_bisheng_jdk_fusion
+from src.install.closesource.boostkit_ksl import install_boostkit_ksl
+from src.install.closesource.bisheng_jdk_fusion import install_bisheng_jdk_fusion
 
 logger = get_logger(__name__)
 
@@ -76,10 +76,6 @@ def run(args):
     log_path = os.path.join(output_dir, "install.log")
     init_logger(level=args.log, log_file=log_path)
 
-    if args.uninstall:
-        run_uninstall(args)
-        return
-
     if args.dir:
         install_dir = args.dir
         if not os.path.exists(install_dir):
@@ -122,10 +118,6 @@ install_funcs = {
     "bisheng_jdk_fusion": install_bisheng_jdk_fusion,
 }
 
-uninstall_funcs = {
-    "boostkit_ksl": uninstall_boostkit_ksl,
-    "bisheng_jdk_fusion": uninstall_bisheng_jdk_fusion,
-}
 
 auto_download_url_mapping = {
 }
@@ -154,17 +146,3 @@ def run_install(args, install_dir):
             logger.warning(
                 f"Package '{name}' is not in the supported install list. Skipping."
             )
-
-
-def run_uninstall(args):
-    if args.name is None:
-        logger.info("No package name provided. Please specify a target package.")
-        return
-
-    for name in args.name:
-        uninstall_func = uninstall_funcs.get(name)
-        if uninstall_func:
-            logger.info(f"Uninstalling package '{name}' ...")
-            uninstall_func()
-        else:
-            logger.error(f"No uninstall function defined for package '{name}'.")

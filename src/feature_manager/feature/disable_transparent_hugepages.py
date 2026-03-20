@@ -26,7 +26,7 @@ FEATURE_NAME = "disable_transparent_hugepages"
 FEATURE_DES = "禁用透明大页"
 
 
-@register_feature(scenarios=["boundary_gateway_appliance", "common"])
+@register_feature(scenarios=["boundary_gateway_appliance"])
 class HugePageDisableFeature(BaseFeature):
     name: str = FEATURE_NAME
     enabled: str = "never"

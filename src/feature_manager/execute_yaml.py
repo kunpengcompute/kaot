@@ -83,11 +83,12 @@ def run_execute(args, output_dir):
 
 
 def check_features_and_generate_base(args, output_dir):
-    feature_map = FEATURE_MAP
     target_file = args.target_file_name
 
     target_cfg = load_config(target_file)
-    target_features = get_feature_keys(target_cfg)
+    # 从 target_cfg 中构建当前目标配置的 feature 映射（实例，包含 YAML 中的 config_path 等字段）
+    target_full_map = build_feature_map(target_cfg)
+    target_features = list(target_full_map.keys())
 
     check_env = check_environment_match(target_cfg)
     if not check_env:
@@ -109,7 +110,22 @@ def check_features_and_generate_base(args, output_dir):
 
     logger.debug("Starting generation process.")
     logger.info(f"The target file path is {target_file}")
-    base_yaml = generate_yaml(target_features, feature_map, output_dir, "base")
+
+    # 为生成 base 配置构建 feature_map：
+    #   对每个调优项，根据 FEATURE_MAP 创建新的实例，
+    #   并优先继承 target YAML 中的 config_path 等字段（如 Kingbase/OpenGauss 的自定义路径）。
+    base_feature_map = {}
+    for feat_name in target_features:
+        if feat_name not in FEATURE_MAP:
+            continue
+        feature_cls = FEATURE_MAP[feat_name]
+        base_inst = feature_cls()
+        target_inst = target_full_map.get(feat_name)
+        if target_inst is not None and hasattr(target_inst, "config_path"):
+            setattr(base_inst, "config_path", getattr(target_inst, "config_path"))
+        base_feature_map[feat_name] = base_inst
+
+    base_yaml = generate_yaml(target_features, base_feature_map, output_dir, "base")
     logger.info(f"Merged base Optimization Item config YAML generated at {os.path.abspath(base_yaml)}")
 
     logger.debug("Starting execute process.")

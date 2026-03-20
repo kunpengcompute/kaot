@@ -46,7 +46,14 @@ python3 kaot.py install -n boostkit_ksl  -d /install_pkgs
 ```
 其中/install_pkgs为软件包放置的目录。
 
-5. 回退不需要执行的调优项（可选）
+5. 卸载加速库（可选）
+
+如需卸载已安装的加速库，请使用新的 uninstall 命令，例如：
+```python
+python3 kaot.py uninstall -n boostkit_ksl
+```
+
+6. 回退不需要执行的调优项（可选）
 
 若要回退指定的调优项，需将基线文件拷贝到kaot/output目录下，并将其中deploy字段修改为Y，然后按调优项使能新生成的配置文件，以回退disable_swap为例，使用方式如下：
 

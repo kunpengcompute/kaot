@@ -17,6 +17,7 @@
 import subprocess
 from src.feature_manager.feature import register_feature
 from src.feature_manager.feature.base import BaseFeature
+from typing import Dict, Any
 from src.utils.log import get_logger
 import shlex
 
@@ -68,6 +69,7 @@ class OptimizeIOQueueScheduler(BaseFeature):
         """
         获取所有磁盘的调度策略，识别SSD并将其调度策略设为none。
         """
+        logger.info("Starting pre_generate_config for io_queue_scheduler.")
         config = self.get_current_config()
         schedulers = config.get("io_queue_scheduler", {})
         # 识别SSD: 通过/sys/block/{disk}/queue/rotational，0为SSD，1为HDD
@@ -84,10 +86,21 @@ class OptimizeIOQueueScheduler(BaseFeature):
             except Exception as e:
                 logger.warning(f"Failed to determine disk type for {disk}: {e}")
                 self.io_queue_scheduler[disk] = schedulers[disk]
-                
+    
+    def generate_config(self) -> Dict[str, Any]:
+        """
+        通用配置生成逻辑
+        :return: 统一格式的配置字典
+        """ 
+        self.pre_generate_config()
+        self.deploy = "Y"
+        config = self.model_dump()
+        logger.debug(f"Optimization Item {self.name} config yaml is generated")
+        return config
+    
     def _apply_config_impl(self) -> dict:
         """
-        下发IO调度策略到所有磁盘的/sys/block/{disk}/queue/scheduler。
+        只对SSD盘下发IO调度策略到/sys/block/{disk}/queue/scheduler。
         """
         schedulers = self.io_queue_scheduler
         if not schedulers or not isinstance(schedulers, dict):
@@ -97,7 +110,20 @@ class OptimizeIOQueueScheduler(BaseFeature):
                 "message": "Missing or invalid parameter: io_queue_scheduler",
             }
         results = {}
-        for disk, value in schedulers.items():
+        ssd_disks = []
+        # 识别SSD盘
+        for disk in schedulers.keys():
+            rotational_path = f"/sys/block/{disk}/queue/rotational"
+            try:
+                with open(rotational_path, "r") as f:
+                    is_rotational = f.read().strip()
+                if is_rotational == "0":
+                    ssd_disks.append(disk)
+            except Exception:
+                pass
+        # 只对SSD盘下发
+        for disk in ssd_disks:
+            value = schedulers[disk]
             safe_value = shlex.quote(str(value))
             cmd = [
                 "bash",
@@ -115,5 +141,28 @@ class OptimizeIOQueueScheduler(BaseFeature):
             except Exception as e:
                 logger.error(f"Exception when setting IO scheduler for {disk}: {e}")
                 results[disk] = {"status": "error", "message": f"Exception: {e}"}
+
+        # 检查SSD盘调度策略是否真的变化
+        unchanged_disks = []
+        for disk in ssd_disks:
+            value = schedulers[disk]
+            path = f"/sys/block/{disk}/queue/scheduler"
+            try:
+                with open(path, "r") as f:
+                    sched_value = f.read().strip()
+                # 当前调度策略用[]包裹
+                current = None
+                for s in sched_value.split():
+                    if s.startswith("[") and s.endswith("]"):
+                        current = s[1:-1]
+                        break
+                if current != str(value):
+                    unchanged_disks.append(disk)
+            except Exception:
+                pass
+        if unchanged_disks:
+            logger.warning(
+                f"Optimization has been executed successfully, but io_queue_scheduler did not change for disks: {', '.join(unchanged_disks)}. Please check if disk io_queue_scheduler policy is locked."
+            )
         return results
       
