@@ -57,13 +57,7 @@ def register(subparsers):
         metavar="",
         help=f"日志级别 (可选{','.join(LOG_LEVEL)})",
     )
-    # -u 参数：卸载
-    parser.add_argument(
-        "-u",
-        "--uninstall",
-        action="store_true",
-        help="卸载指定的加速库",
-    )
+
 
     parser.set_defaults(func=run)
 
@@ -146,3 +140,5 @@ def run_install(args, install_dir):
             logger.warning(
                 f"Package '{name}' is not in the supported install list. Skipping."
             )
+
+
