@@ -15,10 +15,11 @@
 # limitations under the License.
 # ===========================================================================
 import os
-import subprocess
 from src.feature_manager.feature import register_feature
 from src.feature_manager.feature.base import BaseFeature
 from src.utils.log import get_logger
+from src.utils.common import run_cmd
+
 
 logger = get_logger(__name__)
 
@@ -59,19 +60,11 @@ class OvercommitDisableFeature(BaseFeature):
                 f"合法值仅支持：{valid_memory_values} "
             )
 
-        commands = [
-            ["sysctl", "-w", f"vm.zone_reclaim_mode={zone_reclaim_mode}"],
-        ]
-        timeout = 10
-        for cmd in commands:
-            logger.info(f"Executing: {' '.join(cmd)}")
-            result = subprocess.run(
-                cmd,
-                shell=False,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                check=True,
-            )
-            if result.stdout.strip():
-                logger.info(f"Command {cmd} output: {result.stdout.strip()}")
+        try:
+            # 检查是否已存在配置
+            check_cmd = ["grep", "-q", "^vm.zone_reclaim_mode", "/etc/sysctl.conf"]
+            run_cmd(check_cmd)
+            run_cmd(["sed", "-i", f"s/^vm.zone_reclaim_mode=.*/vm.zone_reclaim_mode={zone_reclaim_mode}/", "/etc/sysctl.conf"])
+        except RuntimeError:
+            run_cmd(f"echo vm.zone_reclaim_mode={zone_reclaim_mode} >> /etc/sysctl.conf",is_str=True)
+        run_cmd(["sysctl", "-p"])
