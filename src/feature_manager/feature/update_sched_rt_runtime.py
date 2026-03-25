@@ -18,7 +18,6 @@ import subprocess
 from src.feature_manager.feature import register_feature
 from src.feature_manager.feature.base import BaseFeature
 from src.utils.log import get_logger
-import shlex
 
 logger = get_logger(__name__)
 
@@ -55,53 +54,96 @@ class UpdateSchedRtRuntime(BaseFeature):
 
     def _apply_config_impl(self) -> dict:
         """
-        根据输入配置字典中的 sched_rt_runtime_us 字段（整数类型），
-        写入 /proc/sys/kernel/sched_rt_runtime_us。
+        根据输入配置字典中的 sched_rt_runtime 字段（整数类型），
+        修改 /etc/sysctl.conf 文件中的 kernel.sched_rt_runtime_us 参数，
+        如果文件不存在则创建，如果参数不存在则追加到文件末尾，
+        最后使用 sysctl -p 命令应用更改。
         """
         value = self.sched_rt_runtime
 
         # 检查值是否为 None
         if value is None:
             logger.warning(
-                "The 'sched_rt_runtime_us' parameter is missing. The unit of this parameter is microseconds (us)."
+                "The 'sched_rt_runtime' parameter is missing. The unit of this parameter is microseconds (us)."
             )
             return {
                 "status": "error",
-                "message": "Missing parameter: sched_rt_runtime_us",
+                "message": "Missing parameter: sched_rt_runtime",
             }
 
-        # 将整数转换为安全的字符串用于命令执行
-        value_str = str(value)
-        safe_value = shlex.quote(value_str)
-        cmd = [
-            "bash",
-            "-c",
-            f"echo {safe_value} > /proc/sys/kernel/sched_rt_runtime_us",
-        ]
-
+        sysctl_conf_path = "/etc/sysctl.conf"
+        
+        # 读取现有文件内容，如果文件不存在则初始化为空列表
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            with open(sysctl_conf_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            # 文件不存在，创建空列表
+            lines = []
+            logger.info(f"{sysctl_conf_path} does not exist, will create a new file.")
+        except Exception as e:
+            logger.error(f"Failed to read {sysctl_conf_path}: {e}")
+            return {
+                "status": "error",
+                "message": f"Failed to read {sysctl_conf_path}: {str(e)}"
+            }
+
+        # 查找 kernel.sched_rt_runtime_us 行
+        param_exists = False
+        updated_lines = []
+        param_line = f"kernel.sched_rt_runtime_us = {value}"
+
+        for line in lines:
+            if line.strip().startswith("kernel.sched_rt_runtime_us"):
+                # 替换这一行
+                updated_lines.append(param_line + "\n")
+                param_exists = True
+            else:
+                updated_lines.append(line)
+
+        # 如果参数不存在，则追加到文件末尾
+        if not param_exists:
+            updated_lines.append(param_line + "\n")
+
+        # 写入更新后的内容
+        try:
+            with open(sysctl_conf_path, "w", encoding="utf-8") as f:
+                f.writelines(updated_lines)
+            logger.info(f"Successfully updated {sysctl_conf_path} with {param_line}")
+        except Exception as e:
+            logger.error(f"Failed to write to {sysctl_conf_path}: {e}")
+            return {
+                "status": "error",
+                "message": f"Failed to write to {sysctl_conf_path}: {str(e)}"
+            }
+
+        # 使用 sysctl -p 应用更改
+        try:
+            proc = subprocess.run(
+                ["sysctl", "-p"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
             if proc.returncode == 0:
-                logger.info(
-                    "Successfully set /proc/sys/kernel/sched_rt_runtime_us to %d (unit: us)",
-                    value,
-                )
+                logger.info("Successfully applied sysctl changes using 'sysctl -p'")
                 return {
                     "status": "success",
-                    "message": f"sched_rt_runtime_us is set to {value}",
+                    "message": f"sched_rt_runtime is set to {value} and applied via sysctl -p",
                 }
             else:
                 logger.error(
-                    "Failed to set sched_rt_runtime_us. stdout=%s stderr=%s",
+                    "Failed to apply sysctl changes. stdout=%s stderr=%s",
                     proc.stdout,
                     proc.stderr,
                 )
                 return {
-                    "status": "error",
-                    "message": (proc.stderr or proc.stdout).strip() or "Unknown error",
+                    "status": "warning",
+                    "message": f"sched_rt_runtime is set to {value} in {sysctl_conf_path} but failed to apply via sysctl -p: {(proc.stderr or proc.stdout).strip()}",
                 }
         except Exception as e:
-            logger.exception(
-                "An exception occurred while writing to /proc/sys/kernel/sched_rt_runtime_us"
-            )
-            return {"status": "error", "message": str(e)}
+            logger.error(f"An exception occurred while applying sysctl changes: {e}")
+            return {
+                "status": "warning",
+                "message": f"sched_rt_runtime is set to {value} in {sysctl_conf_path} but exception occurred during sysctl -p: {str(e)}",
+            }
