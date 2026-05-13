@@ -2,5 +2,3 @@ pyyaml
 pydantic
 psutil 
 colorlog
-subprocess
-textwrap
