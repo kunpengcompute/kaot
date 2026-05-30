@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}{{ filename }} - 配置详情{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>配置文件详情</h1>
+    <p class="subtitle">{{ filename }}</p>
+    <div class="header-actions">
+        <a href="{{ url_for('config_page') }}" class="btn-back">&#8592; 返回配置列表</a>
+    </div>
+</div>
+
+<div class="warning-box">
+    <strong>说明：</strong> 这是调优后的配置参数，可以根据业务场景对参数值进行修改，修改后点击「保存修改」。
+</div>
+
+<div class="config-detail">
+    <div class="config-editor">
+        <h3>文件内容</h3>
+        <textarea id="config-content" class="code-editor" rows="20">{{ content }}</textarea>
+    </div>
+    
+    <div class="config-actions-bar">
+        <button class="btn-primary" onclick="saveConfig()">
+            &#128190; 保存修改
+        </button>
+        <button class="btn-secondary" onclick="executeConfig()">
+            &#9654; 执行此配置
+        </button>
+        <button class="btn-danger" onclick="deleteConfig()">
+            &#128465; 删除文件
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const filename = "{{ filename }}";
+
+function saveConfig() {
+    const content = document.getElementById('config-content').value;
+    
+    fetch(`/api/config/${filename}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({content: content})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('配置文件已保存');
+        } else {
+            alert('保存失败: ' + data.error);
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+    });
+}
+
+function executeConfig() {
+    fetch('/api/execute', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            target_file: filename
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            alert('执行失败: ' + data.error);
+        } else {
+            location.href = '/logs/' + data.task_id;
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+    });
+}
+
+function deleteConfig() {
+    if (!confirm('确定要删除此配置文件吗？')) return;
+    
+    fetch(`/api/config/${filename}`, {method: 'DELETE'})
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.href = '/config';
+        } else {
+            alert('删除失败: ' + data.error);
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+    });
+}
+</script>
+{% endblock %}

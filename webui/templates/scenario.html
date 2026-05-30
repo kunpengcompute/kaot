@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}{{ scenario.display_name }} - 调优项列表{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ scenario.display_name }}</h1>
+    <p class="subtitle">{{ scenario.description }}</p>
+    <a href="{{ url_for('index') }}" class="btn-back">&#8592; 返回场景列表</a>
+</div>
+
+{% if scenario.requires_configfile %}
+<div class="warning-box">
+    <strong>注意：</strong> 此场景需要提供配置文件路径
+    <p>{{ scenario.configfile_hint }}</p>
+</div>
+{% endif %}
+
+<div class="scenario-layout">
+    <div class="features-list">
+        <h3>调优项列表</h3>
+        <div class="features-items">
+            {% for feature in features %}
+            <div class="feature-item" data-feature="{{ feature.name }}">
+                <div class="feature-header">
+                    <label class="feature-checkbox">
+                        <input type="checkbox" class="feature-select" value="{{ feature.name }}" checked>
+                        <span class="checkbox-custom"></span>
+                    </label>
+                    <span class="feature-title">{{ feature.title }}</span>
+                    {% if feature.needs_reboot %}
+                    <span class="badge badge-warning">需重启</span>
+                    {% endif %}
+                    {% if feature.has_params %}
+                    <span class="badge badge-info">有参数</span>
+                    {% endif %}
+                </div>
+                <div class="feature-desc">{{ feature.description }}</div>
+                <div class="feature-actions">
+                    <a href="{{ url_for('feature_page', scenario=scenario.name, feature_name=feature.name) }}" 
+                       class="btn-execute">配置执行</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="batch-actions">
+            <h4>批量操作</h4>
+            <div class="batch-form">
+                {% if scenario.requires_configfile %}
+                <div class="form-group">
+                    <label>配置文件路径</label>
+                    <input type="text" id="batch-configfile" class="text-input" 
+                           placeholder="{{ scenario.configfile_hint | replace('请提供openGauss数据库配置文件路径，如: ', '') | replace('请提供金仓数据库配置文件路径，如: ', '') }}">
+                </div>
+                {% endif %}
+                <div class="form-group">
+                    <label>输出文件名</label>
+                    <input type="text" id="batch-output" class="text-input" value="feature_config.yaml">
+                </div>
+                <div class="form-actions">
+                    <button class="btn-primary" onclick="generateSelected()">
+                        生成配置文件
+                    </button>
+                    <button class="btn-secondary" onclick="executeSelected()">
+                        执行已选择项
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="scenario-sidebar">
+        <h3>操作说明</h3>
+        <div class="help-box">
+            <h4>配置执行模式</h4>
+            <p>点击「配置执行」进入调优项详情页，填写参数后执行。</p>
+            
+            <h4>批量生成模式</h4>
+            <p>勾选多个调优项，点击「生成配置文件」生成YAML文件。</p>
+            <p><strong>如果不勾选则默认全选。</strong></p>
+            
+            <h4>配置文件执行</h4>
+            <p>生成配置文件后，前往「配置」页面选择文件执行。</p>
+        </div>
+        
+        <div class="quick-links">
+            <h4>快捷链接</h4>
+            <a href="{{ url_for('config_page') }}" class="link-item">
+                <span class="icon">&#128196;</span> 配置文件管理
+            </a>
+            <a href="{{ url_for('tasks_page') }}" class="link-item">
+                <span class="icon">&#128203;</span> 执行任务列表
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const scenarioName = "{{ scenario.name }}";
+const features = {{ features | tojson }};
+const requiresConfigfile = {{ scenario.requires_configfile | default(false) | lower }};
+
+function getSelectedFeatures() {
+    const checkboxes = document.querySelectorAll('.feature-select:checked');
+    if (checkboxes.length === 0) {
+        return features.map(f => f.name);
+    }
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function generateSelected() {
+    const featureNames = getSelectedFeatures();
+    const outputFile = document.getElementById('batch-output').value || 'feature_config.yaml';
+    const configfile = requiresConfigfile ? document.getElementById('batch-configfile').value : null;
+    
+    if (requiresConfigfile && !configfile) {
+        alert('此场景需要提供配置文件路径');
+        return;
+    }
+    
+    if (featureNames.length === 0) {
+        alert('请至少选择一个调优项');
+        return;
+    }
+    
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '生成中...';
+    
+    fetch('/api/generate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            scenario: scenarioName,
+            features: featureNames,
+            output_file: outputFile,
+            configfile: configfile
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            alert('生成失败: ' + data.error);
+            btn.disabled = false;
+            btn.textContent = '生成配置文件';
+        } else {
+            alert('配置文件生成任务已启动');
+            location.href = '/logs/' + data.task_id;
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+        btn.disabled = false;
+        btn.textContent = '生成配置文件';
+    });
+}
+
+function executeSelected() {
+    alert('请先前往配置页面选择要执行的配置文件');
+    location.href = '/config';
+}
+</script>
+{% endblock %}

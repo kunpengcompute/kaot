@@ -1,0 +1,594 @@
+scenarios:
+  common:
+    display_name: "通用场景"
+    description: "适用于通用服务器的性能优化"
+    icon: "server"
+    features:
+      - name: disable_swap
+        title: "禁用交换内存"
+        description: "降低swap使用倾向，提升内存性能"
+        needs_reboot: false
+        params:
+          - name: swappiness
+            type: number
+            label: "Swap倾向值"
+            default: 0
+            min: 0
+            max: 80
+            description: "值越小越倾向于使用物理内存"
+      
+      - name: enable_cpu_performance_mode
+        title: "使能CPU高性能模式"
+        description: "设置CPU调速器为performance模式"
+        needs_reboot: true
+        params:
+          - name: cpufreq_default_governor
+            type: select
+            label: "CPU调速器"
+            default: "performance"
+            options:
+              - "performance"
+              - "powersave"
+              - "ondemand"
+              - "conservative"
+              - "schedutil"
+            description: "performance模式可获得最佳性能"
+      
+      - name: config_smt2
+        title: "配置超线程"
+        description: "开启或关闭超线程(SMT)功能"
+        needs_reboot: true
+        params:
+          - name: SMT2_status
+            type: select
+            label: "超线程状态"
+            default: "enable"
+            options:
+              - "enable"
+              - "disable"
+            description: "需要在BIOS中设置"
+      
+      - name: check_bisheng_fusion_jdk_installed
+        title: "检查毕昇JDK"
+        description: "检查毕昇融合JDK是否安装"
+        needs_reboot: false
+        params: []
+      
+      - name: config_nic_affinity
+        title: "网卡亲和性配置"
+        description: "配置网卡中断CPU亲和性"
+        needs_reboot: false
+        params:
+          - name: nic_name
+            type: text
+            label: "网卡名称"
+            default: ""
+            placeholder: "如: eth0, enp3s0"
+            description: "指定要配置的网卡名称"
+
+  boundary_gateway_appliance:
+    display_name: "边界网关一体机"
+    description: "边界网关场景的专项优化配置"
+    icon: "gateway"
+    features:
+      - name: disable_swap
+        title: "禁用交换内存"
+        description: "降低swap使用倾向"
+        needs_reboot: false
+        params:
+          - name: swappiness
+            type: number
+            label: "Swap倾向值"
+            default: 0
+            min: 0
+            max: 80
+      
+      - name: enable_cpu_performance_mode
+        title: "使能CPU高性能模式"
+        description: "设置CPU调速器为performance模式"
+        needs_reboot: true
+        params:
+          - name: cpufreq_default_governor
+            type: select
+            label: "CPU调速器"
+            default: "performance"
+            options:
+              - "performance"
+              - "powersave"
+      
+      - name: config_smt2
+        title: "配置超线程"
+        description: "开启或关闭超线程功能"
+        needs_reboot: true
+        params:
+          - name: SMT2_status
+            type: select
+            label: "超线程状态"
+            default: "enable"
+            options:
+              - "enable"
+              - "disable"
+      
+      - name: config_hugepages
+        title: "使用大页内存"
+        description: "配置大页内存提升内存访问效率"
+        needs_reboot: true
+        params:
+          - name: hugepagesz
+            type: select
+            label: "大页大小"
+            default: "1G"
+            options:
+              - "1G"
+              - "2M"
+            description: "选择大页内存的页面大小"
+          - name: hugepages
+            type: number
+            label: "大页数量"
+            default: 4
+            min: 1
+            max: 1000
+            description: "大页内存的总页数"
+      
+      - name: config_core_isolation
+        title: "配置核隔离"
+        description: "隔离指定CPU核心用于专用任务"
+        needs_reboot: true
+        params:
+          - name: isolcpus
+            type: text
+            label: "隔离CPU列表"
+            default: "1-5"
+            placeholder: "如: 1-5 或 1,2,3"
+            description: "指定要隔离的CPU核心"
+          - name: nohz_full
+            type: text
+            label: "无滴答CPU列表"
+            default: "1-5"
+            description: "与隔离CPU列表保持一致"
+          - name: rcu_nocbs
+            type: text
+            label: "RCU卸载CPU列表"
+            default: "1-5"
+            description: "与隔离CPU列表保持一致"
+      
+      - name: disable_transparent_hugepages
+        title: "禁用透明大页"
+        description: "禁用透明大页减少内存碎片"
+        needs_reboot: false
+        params:
+          - name: enabled
+            type: select
+            label: "透明大页状态"
+            default: "never"
+            options:
+              - "never"
+              - "always"
+              - "madvise"
+          - name: defrag
+            type: select
+            label: "碎片整理状态"
+            default: "never"
+            options:
+              - "never"
+              - "always"
+              - "defer"
+              - "madvise"
+      
+      - name: disable_memory_overcommit
+        title: "禁用内存主动回收"
+        description: "禁用内存主动回收策略"
+        needs_reboot: false
+        params:
+          - name: zone_reclaim
+            type: select
+            label: "回收模式"
+            default: "0"
+            options:
+              - "0"
+              - "1"
+              - "2"
+              - "4"
+            description: "0=禁用回收"
+      
+      - name: update_irqbalance
+        title: "关闭内核中断平衡"
+        description: "关闭irqbalance服务"
+        needs_reboot: false
+        params:
+          - name: irq_balance_status
+            type: select
+            label: "中断平衡状态"
+            default: "inactive"
+            options:
+              - "active"
+              - "inactive"
+            description: "inactive表示关闭服务"
+      
+      - name: update_sched_rt_runtime
+        title: "关闭实时任务限制"
+        description: "关闭实时任务运行时间限制"
+        needs_reboot: false
+        params:
+          - name: sched_rt_runtime
+            type: number
+            label: "运行时间(微秒)"
+            default: -1
+            min: -1
+            max: 1000000
+            description: "-1表示无限制"
+      
+      - name: check_boostkit_hyperscan_installed
+        title: "检查BoostKit Hyperscan"
+        description: "检查BoostKit Hyperscan加速库是否安装"
+        needs_reboot: false
+        params: []
+
+  kingbase_database:
+    display_name: "金仓数据库"
+    description: "金仓数据库专项优化配置"
+    icon: "database"
+    requires_configfile: true
+    configfile_hint: "请提供金仓数据库配置文件路径，如: /opt/Kingbase/ES/V8/data/kingbase.conf"
+    features:
+      - name: disable_swap
+        title: "禁用交换内存"
+        description: "降低swap使用倾向"
+        needs_reboot: false
+        params:
+          - name: swappiness
+            type: number
+            label: "Swap倾向值"
+            default: 0
+            min: 0
+            max: 80
+      
+      - name: config_smt2
+        title: "配置超线程"
+        description: "开启或关闭超线程功能"
+        needs_reboot: true
+        params:
+          - name: SMT2_status
+            type: select
+            label: "超线程状态"
+            default: "disable"
+            options:
+              - "enable"
+              - "disable"
+      
+      - name: config_nic_affinity
+        title: "网卡亲和性配置"
+        description: "配置网卡中断CPU亲和性"
+        needs_reboot: false
+        params:
+          - name: nic_name
+            type: text
+            label: "网卡名称"
+            default: ""
+            placeholder: "如: eth0, enp3s0"
+            description: "指定要配置的网卡名称"
+      
+      - name: optimize_kingbase_database_config
+        title: "数据库参数优化"
+        description: "优化金仓数据库配置参数"
+        needs_reboot: false
+        params:
+          - name: shared_buffers
+            type: text
+            label: "共享缓冲区"
+            default: ""
+            placeholder: "如: 16GB"
+            description: "建议设置为内存的65%"
+          - name: checkpoint_timeout
+            type: text
+            label: "检查点超时"
+            default: "20min"
+            description: "检查点间隔时间"
+          - name: bgwriter_delay
+            type: text
+            label: "后台写延迟"
+            default: "10ms"
+          - name: max_wal_size
+            type: text
+            label: "最大WAL大小"
+            default: "300GB"
+          - name: checkpoint_completion_target
+            type: number
+            label: "检查点完成目标"
+            default: 0.9
+            min: 0.1
+            max: 1.0
+            description: "0-1之间的小数"
+          - name: max_connections
+            type: number
+            label: "最大连接数"
+            default: 2048
+            min: 100
+            max: 10000
+      
+      - name: optimize_io_queue_scheduler
+        title: "IO调度策略优化"
+        description: "优化磁盘IO调度策略"
+        needs_reboot: false
+        params: []
+
+  opengauss_database:
+    display_name: "openGauss数据库"
+    description: "openGauss数据库专项优化配置"
+    icon: "database"
+    requires_configfile: true
+    configfile_hint: "请提供openGauss数据库配置文件路径，如: opengauss_database:/opt/openGauss/data/postgresql.conf"
+    features:
+      - name: enable_cpu_performance_mode
+        title: "使能CPU高性能模式"
+        description: "设置CPU调速器为performance模式"
+        needs_reboot: true
+        params:
+          - name: cpufreq_default_governor
+            type: select
+            label: "CPU调速器"
+            default: "performance"
+            options:
+              - "performance"
+              - "powersave"
+              - "ondemand"
+              - "conservative"
+              - "schedutil"
+            description: "performance模式可获得最佳性能"
+      
+      - name: optimize_opengauss_database_config
+        title: "数据库参数优化"
+        description: "优化openGauss数据库配置参数"
+        needs_reboot: false
+        params:
+          - name: shared_buffers
+            type: text
+            label: "共享缓冲区"
+            default: ""
+            placeholder: "如: 16GB"
+            description: "建议设置为内存的30%"
+          - name: max_connections
+            type: number
+            label: "最大连接数"
+            default: 2048
+            min: 100
+            max: 10000
+          - name: allow_concurrent_tuple_update
+            type: text
+            label: "允许并发元组更新"
+            default: "true"
+          - name: audit_enabled
+            type: text
+            label: "审计开关"
+            default: "off"
+          - name: checkpoint_segments
+            type: number
+            label: "检查点段数"
+            default: 1024
+          - name: cstore_buffers
+            type: text
+            label: "列存缓冲区"
+            default: "16MB"
+          - name: enable_alarm
+            type: text
+            label: "告警开关"
+            default: "off"
+          - name: full_page_writes
+            type: text
+            label: "全页写入"
+            default: "off"
+          - name: max_files_per_process
+            type: number
+            label: "每进程最大文件数"
+            default: 100000
+          - name: max_prepared_transactions
+            type: number
+            label: "最大预备事务数"
+            default: 2048
+          - name: wal_buffers
+            type: text
+            label: "WAL缓冲区"
+            default: "1GB"
+          - name: synchronous_commit
+            type: text
+            label: "同步提交"
+            default: "on"
+          - name: maintenance_work_mem
+            type: text
+            label: "维护工作内存"
+            default: "2GB"
+          - name: vacuum_cost_limit
+            type: number
+            label: "清理代价限制"
+            default: 10000
+          - name: autovacuum_max_workers
+            type: number
+            label: "自动清理最大工作进程数"
+            default: 10
+          - name: autovacuum_vacuum_cost_delay
+            type: number
+            label: "自动清理代价延迟"
+            default: 10
+          - name: enable_material
+            type: text
+            label: "启用物化"
+            default: "off"
+          - name: wal_log_hints
+            type: text
+            label: "WAL日志提示"
+            default: "off"
+          - name: autovacuum_vacuum_scale_factor
+            type: number
+            label: "自动清理缩放因子"
+            default: 0.1
+          - name: autovacuum_analyze_scale_factor
+            type: number
+            label: "自动分析缩放因子"
+            default: 0.02
+          - name: enable_save_datachanged_timestamp
+            type: text
+            label: "启用数据变更时间戳保存"
+            default: "false"
+          - name: instr_unique_sql_count
+            type: number
+            label: "唯一SQL计数"
+            default: 5000
+          - name: advance_xlog_file_num
+            type: number
+            label: "预分配XLOG文件数"
+            default: 100
+          - name: track_counts
+            type: text
+            label: "跟踪计数"
+            default: "on"
+          - name: track_sql_count
+            type: text
+            label: "跟踪SQL计数"
+            default: "on"
+          - name: plog_merge_age
+            type: number
+            label: "PLOG合并年龄"
+            default: 0
+          - name: session_timeout
+            type: number
+            label: "会话超时"
+            default: 0
+          - name: enable_instance_metric_persistent
+            type: text
+            label: "启用实例指标持久化"
+            default: "off"
+          - name: enable_logical_io_statistics
+            type: text
+            label: "启用逻辑IO统计"
+            default: "off"
+          - name: enable_user_metric_persistent
+            type: text
+            label: "启用用户指标持久化"
+            default: "off"
+          - name: enable_xlog_prune
+            type: text
+            label: "启用XLOG裁剪"
+            default: "off"
+          - name: fenable_resource_track
+            type: text
+            label: "启用资源跟踪"
+            default: "on"
+          - name: remote_read_mode
+            type: text
+            label: "远程读模式"
+            default: "non_authentication"
+          - name: wal_level
+            type: text
+            label: "WAL级别"
+            default: "hot_standby"
+          - name: hot_standby
+            type: text
+            label: "热备"
+            default: "on"
+          - name: hot_standby_feedback
+            type: text
+            label: "热备反馈"
+            default: "off"
+          - name: enable_asp
+            type: text
+            label: "启用ASP"
+            default: "off"
+          - name: enable_bbox_dump
+            type: text
+            label: "启用BBOX转储"
+            default: "off"
+          - name: bgwriter_flush_after
+            type: number
+            label: "后台写刷新后"
+            default: 32
+          - name: wal_keep_segments
+            type: number
+            label: "WAL保留段数"
+            default: 1025
+          - name: xloginsert_locks
+            type: number
+            label: "XLOG插入锁数"
+            default: 48
+          - name: bgwriter_delay
+            type: number
+            label: "后台写延迟(ms)"
+            default: 5
+          - name: sincremental_checkpoint_timeout
+            type: text
+            label: "增量检查点超时"
+            default: "5min"
+          - name: walwriter_sleep_threshold
+            type: number
+            label: "WAL写休眠阈值"
+            default: 50000
+          - name: xloginsert_locks_2
+            type: number
+            label: "XLOG插入锁数2"
+            default: 16
+          - name: pagewriter_sleep
+            type: text
+            label: "页写器休眠"
+            default: "100ms"
+          - name: incremental_checkpoint_timeout
+            type: text
+            label: "增量检查点超时"
+            default: "120s"
+          - name: wal_file_init_num
+            type: number
+            label: "WAL文件初始数"
+            default: 30
+          - name: pagewriter_thread_num
+            type: number
+            label: "页写器线程数"
+            default: 2
+          - name: max_redo_log_size
+            type: text
+            label: "最大REDO日志大小"
+            default: "400GB"
+          - name: max_io_capacity
+            type: text
+            label: "最大IO容量"
+            default: "1GB"
+          - name: enable_cachedplan_mgr
+            type: text
+            label: "启用缓存计划管理"
+            default: "off"
+          - name: light_comm
+            type: text
+            label: "轻量通信"
+            default: "on"
+          - name: enable_indexscan_optimization
+            type: text
+            label: "启用索引扫描优化"
+            default: "on"
+          - name: time_record_level
+            type: number
+            label: "时间记录级别"
+            default: 1
+
+libraries:
+  boostkit_ksl:
+    display_name: "BoostKit KSL"
+    description: "鲲鹏BoostKit加速库"
+    manual_download: true
+    download_url: "https://www.hikunpeng.com/boostkit/library/detail?subtab=Hyperscan"
+    params:
+      - name: install_dir
+        type: text
+        label: "安装包目录"
+        required: true
+        placeholder: "如: /install_pkgs"
+        description: "安装包所在目录路径"
+  
+  bisheng_jdk_fusion:
+    display_name: "毕昇JDK Fusion"
+    description: "毕昇融合JDK"
+    manual_download: true
+    download_url: "https://www.hikunpeng.com/zh/developer/devkit/download/exagear"
+    params:
+      - name: install_dir
+        type: text
+        label: "安装包目录"
+        required: true
+        placeholder: "如: /install_pkgs"
+        description: "安装包所在目录路径"
