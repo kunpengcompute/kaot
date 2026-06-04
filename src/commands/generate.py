@@ -79,7 +79,7 @@ def register(subparsers):
             "可选参数\n"
             "格式：应用1：/path1, 应用2：/path2。 示例：kingbase_database:/opt/Kingbase/ES/V8/data/kingbase.conf,opengauss_database:/opt/openGuass/data/postgresql.conf\n"
             "用逗号分隔多个实例或应用。路径为应用的配置文件路径\n"
-            "当前版本支持 kingbase_database（金仓数据库） 和 opengauss_database(openGauss数据库)"
+            "当前版本支持 kingbase_database（金仓数据库）、opengauss_database（openGauss数据库）和 dameng_database（达梦数据库）"
         ),
     )
     parser.add_argument(
@@ -182,8 +182,8 @@ def build_help(CHOICES, DESCRIPTION, info=""):
 
 
 def run(args):
-    # 处理--configfile参数，强制 opengauss/kingbase 相关场景或调优项必须指定
-    scenario_requires_configfile = {"kingbase_database", "opengauss_database"}
+    # 处理--configfile参数，强制 opengauss/kingbase/dameng 相关场景或调优项必须指定
+    scenario_requires_configfile = {"kingbase_database", "opengauss_database", "dameng_database"}
 
     validate_features(args.features, "features")
     validate_features(args.add_features, "add_features")

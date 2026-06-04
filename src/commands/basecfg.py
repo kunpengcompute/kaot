@@ -49,7 +49,7 @@ def register(subparsers):
             "可选参数\n"
             "格式：应用1：/path1, 应用2：/path2。 示例：kingbase_database:/opt/Kingbase/ES/V8/data/kingbase.conf,opengauss_database:/opt/openGuass/data/postgresql.conf\n"
             "用逗号分隔多个实例或应用。路径为应用的配置文件路径\n"
-            "当前版本支持 kingbase_database（金仓数据库） 和 opengauss_database(openGauss数据库)"
+            "当前版本支持 kingbase_database（金仓数据库）、opengauss_database（openGauss数据库）和 dameng_database（达梦数据库）"
         ),
     )
     parser.set_defaults(func=run)

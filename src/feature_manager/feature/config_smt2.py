@@ -27,7 +27,7 @@ FEATURE_NAME = "config_smt2"
 FEATURE_DES = "配置超线程"
 
 
-@register_feature(scenarios=["kingbase_database", "boundary_gateway_appliance", "common"])
+@register_feature(scenarios=["kingbase_database", "boundary_gateway_appliance", "dameng_database", "common"])
 class CheckSMT2(BaseFeature):
     name: str = FEATURE_NAME
     SMT2_status: str = 'enable'
