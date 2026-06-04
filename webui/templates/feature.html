@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+
+{% block title %}{{ feature.title }} - 配置执行{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ feature.title }}</h1>
+    <p class="subtitle">{{ feature.description }}</p>
+    <div class="header-actions">
+        <a href="{{ url_for('scenario_page', name=scenario.name) }}" class="btn-back">&#8592; 返回场景</a>
+        <a href="{{ url_for('index') }}" class="btn-back">&#8592; 返回首页</a>
+    </div>
+</div>
+
+{% if feature.needs_reboot %}
+<div class="warning-box">
+    <strong>注意：</strong> 此调优项执行后需要重启服务器才能生效
+</div>
+{% endif %}
+
+<div class="feature-layout">
+    <div class="feature-main">
+        <div class="form-section" id="form-section">
+            <h2>参数配置</h2>
+            
+            {% if feature.params %}
+            <form id="feature-form" class="param-form">
+                <input type="hidden" name="feature" value="{{ feature.name }}">
+                <input type="hidden" name="scenario" value="{{ scenario.name }}">
+                
+                {% for param in feature.params %}
+                <div class="form-group">
+                    <label for="{{ param.name }}">
+                        {{ param.label }}
+                        {% if param.required %}
+                        <span class="required">*</span>
+                        {% endif %}
+                    </label>
+                    
+                    {% if param.description %}
+                    <small class="param-hint">{{ param.description }}</small>
+                    {% endif %}
+                    
+                    {% if param.type == 'select' %}
+                    <select name="{{ param.name }}" id="{{ param.name }}"
+                            {% if param.required %}required{% endif %}>
+                        <option value="">-- 请选择 --</option>
+                        {% for option in param.options %}
+                        <option value="{{ option }}" 
+                                {% if option == param.default %}selected{% endif %}>
+                            {{ option }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    
+                    {% elif param.type == 'number' %}
+                    <input type="number" name="{{ param.name }}" id="{{ param.name }}"
+                           value="{{ param.default }}"
+                           {% if param.min %}min="{{ param.min }}"{% endif %}
+                           {% if param.max %}max="{{ param.max }}"{% endif %}
+                           {% if param.required %}required{% endif %}
+                           {% if param.placeholder %}placeholder="{{ param.placeholder }}"{% endif %}>
+                    
+                    {% else %}
+                    <input type="text" name="{{ param.name }}" id="{{ param.name }}"
+                           value="{{ param.default }}"
+                           {% if param.required %}required{% endif %}
+                           {% if param.placeholder %}placeholder="{{ param.placeholder }}"{% endif %}>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary btn-large" id="execute-btn">
+                        生成配置并执行
+                    </button>
+                </div>
+            </form>
+            
+            {% else %}
+            <div class="no-params-message">
+                <p>此调优项无需参数配置，可直接执行</p>
+                <div class="form-actions">
+                    <button class="btn-primary btn-large" onclick="executeNoParams()">
+                        直接执行
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="log-section" id="log-section" style="display: none;">
+            <h3>执行日志</h3>
+            <div class="log-container">
+                <pre id="log-output"></pre>
+            </div>
+            <div class="log-status">
+                <span id="log-status-text">执行中...</span>
+                <span id="log-time"></span>
+                <button id="kill-btn" class="btn-danger" onclick="killTask()" style="display: none;">
+                    中止执行
+                </button>
+            </div>
+            <div class="log-actions" style="display: none;">
+                <button class="btn-primary" onclick="showForm()">
+                    重新执行
+                </button>
+                <a href="{{ url_for('scenario_page', name=scenario.name) }}" class="btn-secondary">
+                    返回场景
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="feature-sidebar">
+        <h3>调优项信息</h3>
+        <div class="info-box">
+            <div class="info-item">
+                <label>名称</label>
+                <span>{{ feature.name }}</span>
+            </div>
+            <div class="info-item">
+                <label>所属场景</label>
+                <span>{{ scenario.display_name }}</span>
+            </div>
+            {% if feature.needs_reboot %}
+            <div class="info-item">
+                <label>生效方式</label>
+                <span class="badge badge-warning">需重启</span>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="help-box">
+            <h4>执行流程</h4>
+            <ol>
+                <li>填写参数配置</li>
+                <li>点击「生成配置并执行」</li>
+                <li>查看实时日志</li>
+                <li>等待执行完成</li>
+            </ol>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const featureName = "{{ feature.name }}";
+const scenarioName = "{{ scenario.name }}";
+const hasParams = {{ 'true' if feature.params else 'false' }};
+let currentTaskId = null;
+let logPos = 0;
+let logTimer = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('feature-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            executeFeature();
+        });
+    }
+});
+
+function executeNoParams() {
+    startExecution({});
+}
+
+function executeFeature() {
+    const form = document.getElementById('feature-form');
+    const formData = new FormData(form);
+    const params = {};
+    
+    formData.forEach((value, key) => {
+        if (key !== 'feature' && key !== 'scenario') {
+            params[key] = value;
+        }
+    });
+    
+    startExecution(params);
+}
+
+function startExecution(params) {
+    const executeBtn = document.getElementById('execute-btn');
+    if (executeBtn) {
+        executeBtn.disabled = true;
+        executeBtn.textContent = '执行中...';
+    }
+    
+    const outputFile = 'feature_' + featureName + '_' + Date.now() + '.yaml';
+    
+    fetch('/api/generate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            scenario: scenarioName,
+            features: [featureName],
+            output_file: outputFile,
+            configfile: params.configfile || null
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            alert('生成失败: ' + data.error);
+            if (executeBtn) {
+                executeBtn.disabled = false;
+                executeBtn.textContent = '生成配置并执行';
+            }
+        } else {
+            currentTaskId = data.task_id;
+            showLogSection();
+            startLogPolling();
+            
+            setTimeout(() => {
+                executeGeneratedConfig(outputFile, params);
+            }, 1000);
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+        if (executeBtn) {
+            executeBtn.disabled = false;
+            executeBtn.textContent = '生成配置并执行';
+        }
+    });
+}
+
+function executeGeneratedConfig(outputFile, params) {
+    fetch('/api/execute', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            target_file: outputFile,
+            features: [featureName],
+            configfile: params.configfile || null
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            appendLog('执行失败: ' + data.error);
+        }
+    })
+    .catch(e => {
+        appendLog('执行请求失败: ' + e);
+    });
+}
+
+function showLogSection() {
+    document.getElementById('log-section').style.display = 'block';
+    document.getElementById('form-section').style.display = 'none';
+    document.getElementById('log-output').innerHTML = '';
+    document.getElementById('log-status-text').textContent = '执行中...';
+    document.getElementById('kill-btn').style.display = 'inline-block';
+}
+
+function showForm() {
+    document.getElementById('log-section').style.display = 'none';
+    document.getElementById('form-section').style.display = 'block';
+    document.getElementById('kill-btn').style.display = 'none';
+    
+    const executeBtn = document.getElementById('execute-btn');
+    if (executeBtn) {
+        executeBtn.disabled = false;
+        executeBtn.textContent = '生成配置并执行';
+    }
+}
+
+function appendLog(text) {
+    const logOutput = document.getElementById('log-output');
+    const coloredContent = parseLogColors(text);
+    logOutput.insertAdjacentHTML('beforeend', coloredContent + '\n');
+    logOutput.scrollTop = logOutput.scrollHeight;
+}
+
+function startLogPolling() {
+    logPos = 0;
+    pollLogs();
+}
+
+function pollLogs() {
+    if (!currentTaskId) return;
+    
+    fetch(`/api/logs/${currentTaskId}?pos=${logPos}`)
+    .then(r => r.json())
+    .then(data => {
+        if (data.content) {
+            const logOutput = document.getElementById('log-output');
+            const coloredContent = parseLogColors(data.content);
+            logOutput.insertAdjacentHTML('beforeend', coloredContent);
+            logPos = data.pos;
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+        
+        if (data.status === 'running') {
+            document.getElementById('kill-btn').style.display = 'inline-block';
+            logTimer = setTimeout(pollLogs, 500);
+        } else {
+            document.getElementById('kill-btn').style.display = 'none';
+            finishExecution(data.status);
+        }
+    })
+    .catch(e => {
+        console.error('日志获取失败:', e);
+        logTimer = setTimeout(pollLogs, 1000);
+    });
+}
+
+function finishExecution(status) {
+    const statusText = document.getElementById('log-status-text');
+    const executeBtn = document.getElementById('execute-btn');
+    const logActions = document.querySelector('.log-actions');
+    const killBtn = document.getElementById('kill-btn');
+    
+    killBtn.style.display = 'none';
+    
+    if (status === 'success') {
+        statusText.textContent = '执行成功';
+        statusText.className = 'status-success';
+    } else if (status === 'failed') {
+        statusText.textContent = '执行失败';
+        statusText.className = 'status-failed';
+    } else {
+        statusText.textContent = '执行出错';
+        statusText.className = 'status-error';
+    }
+    
+    if (executeBtn) {
+        executeBtn.disabled = false;
+        executeBtn.textContent = '重新执行';
+    }
+    
+    if (logActions) {
+        logActions.style.display = 'block';
+    }
+}
+
+function killTask() {
+    if (!currentTaskId) return;
+    
+    if (!confirm('确定要中止当前任务吗？')) return;
+    
+    const killBtn = document.getElementById('kill-btn');
+    killBtn.disabled = true;
+    killBtn.textContent = '中止中...';
+    
+    fetch(`/api/kill/${currentTaskId}`, {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('log-status-text').textContent = '已中止';
+            document.getElementById('log-status-text').className = 'status-killed';
+            killBtn.style.display = 'none';
+            clearTimeout(logTimer);
+            
+            const executeBtn = document.getElementById('execute-btn');
+            if (executeBtn) {
+                executeBtn.disabled = false;
+                executeBtn.textContent = '重新执行';
+            }
+            
+            const logActions = document.querySelector('.log-actions');
+            if (logActions) {
+                logActions.style.display = 'block';
+            }
+        } else {
+            alert('中止失败: ' + data.error);
+            killBtn.disabled = false;
+            killBtn.textContent = '中止执行';
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+        killBtn.disabled = false;
+        killBtn.textContent = '中止执行';
+    });
+}
+</script>
+{% endblock %}

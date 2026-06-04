@@ -28,7 +28,7 @@ FEATURE_NAME = "optimize_io_queue_scheduler"
 FEATURE_DES = "优化磁盘IO调度策略"
 
 
-@register_feature(scenarios=["kingbase_database", "opengauss_database"])
+@register_feature(scenarios=["kingbase_database"])
 class OptimizeIOQueueScheduler(BaseFeature):
     name: str = FEATURE_NAME
     io_queue_scheduler: dict = {}  # {disk: scheduler}

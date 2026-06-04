@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}KAOT - 选择调优场景{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>选择调优场景</h1>
+    <p class="subtitle">选择适合您的应用场景，开始性能优化</p>
+</div>
+
+<div class="scenarios-grid">
+    {% for scenario in scenarios %}
+    <div class="scenario-card" onclick="location.href='{{ url_for('scenario_page', name=scenario.name) }}'">
+        <div class="scenario-icon">
+            {% if scenario.icon == 'server' %}
+            <span class="icon-server">&#128421;</span>
+            {% elif scenario.icon == 'gateway' %}
+            <span class="icon-gateway">&#128279;</span>
+            {% elif scenario.icon == 'database' %}
+            <span class="icon-database">&#128451;</span>
+            {% else %}
+            <span class="icon-default">&#128187;</span>
+            {% endif %}
+        </div>
+        <div class="scenario-info">
+            <h2>{{ scenario.display_name }}</h2>
+            <p class="scenario-desc">{{ scenario.description }}</p>
+            <div class="scenario-meta">
+                <span class="feature-count">{{ scenario.feature_count }} 个调优项</span>
+                {% if scenario.requires_configfile %}
+                <span class="badge badge-warning">需要配置文件</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="scenario-action">
+            <button class="btn-primary">开始调优</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="info-section">
+    <h3>快速开始指南</h3>
+    <ol>
+        <li>选择适合的调优场景</li>
+        <li>查看该场景下的调优项列表</li>
+        <li>选择要执行的调优项，填写参数</li>
+        <li>生成配置文件或直接执行调优</li>
+        <li>查看实时日志，等待执行完成</li>
+    </ol>
+</div>
+
+<div class="quick-actions">
+    <h3>快捷操作</h3>
+    <div class="action-buttons">
+        <button class="btn-action" onclick="generateBaseline()">
+            <span class="icon">&#128190;</span> 生成基线配置
+        </button>
+        <button class="btn-action" onclick="location.href='{{ url_for('config_page') }}'">
+            <span class="icon">&#128196;</span> 查看配置文件
+        </button>
+        <button class="btn-action" onclick="location.href='{{ url_for('tasks_page') }}'">
+            <span class="icon">&#128203;</span> 查看执行任务
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function generateBaseline() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '生成中...';
+    
+    fetch('/api/basecfg', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            alert('生成失败: ' + data.error);
+            btn.disabled = false;
+            btn.textContent = '生成基线配置';
+        } else {
+            alert('基线配置生成任务已启动，请前往任务页面查看进度');
+            location.href = '/logs/' + data.task_id;
+        }
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+        btn.disabled = false;
+        btn.textContent = '生成基线配置';
+    });
+}
+</script>
+{% endblock %}
