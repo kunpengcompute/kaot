@@ -19,6 +19,7 @@ from typing import Optional
 from src.feature_manager.feature import register_feature
 from src.feature_manager.feature.base import BaseFeature
 from src.utils.log import get_logger
+from src.utils.db_config_utils import get_config_file_lines, find_last_value_in_config, update_config_file
 
 logger = get_logger(__name__)
 
@@ -96,45 +97,24 @@ class OptimizeDamengDatabaseConfig(BaseFeature):
     WORKER_THREADS: Optional[int] = _cpu
     TASK_THREADS: Optional[int] = _cpu
 
-    def _parse_dm_ini_value(self, key: str, lines: list) -> Optional[str]:
-        """在 dm.ini 行中查找 key 的最后一个有效值，跳过 ; 和 # 注释和章节头"""
-        value = None
-        for line in lines:
-            stripped = line.strip()
-            if not stripped or stripped.startswith(('#', ';')) or stripped.startswith('['):
-                continue
-            if '=' in stripped:
-                k, v = stripped.split('=', 1)
-                if k.strip() == key:
-                    raw = v.strip()
-                    for comment_char in (';', '#'):
-                        idx = raw.find(comment_char)
-                        if idx != -1:
-                            raw = raw[:idx].strip()
-                    value = raw
-        return value
-
     def get_current_config(self) -> Optional[dict]:
         self.deploy = "NA"
         non_config_keys = {"name", "config_path", "config_bak_path", "deploy", "config_mapping_apps_name"}
-
-        if not os.path.exists(self.config_path):
+        config_lines = get_config_file_lines(self.config_path)
+        if not config_lines:
             logger.info(f"Config file {self.config_path} not found, skip this optimization item and backup.")
             return None
-
-        with open(self.config_path, "r", encoding="utf-8") as f:
-            config_lines = f.readlines()
 
         for key in self.__dict__:
             if key in non_config_keys:
                 continue
-            value = self._parse_dm_ini_value(key, config_lines)
+            value = find_last_value_in_config(key, config_lines)
             if value is not None:
                 field_type = type(getattr(self, key))
                 if field_type in (int, float):
                     try:
                         self.__dict__[key] = field_type(value)
-                    except (ValueError, TypeError):
+                    except Exception:
                         self.__dict__[key] = None
                 else:
                     self.__dict__[key] = value
@@ -142,72 +122,21 @@ class OptimizeDamengDatabaseConfig(BaseFeature):
                 self.__dict__[key] = None
 
         logger.debug(f"Optimization Item {self.name} current config loaded from {self.config_path}")
-        return self.model_dump()
+        config_dict = self.model_dump()
+        return config_dict
 
     def _apply_config_impl(self) -> dict:
+        """
+        调用db_config_utils工具写回配置文件。
+        """
         non_config_keys = {"name", "config_path", "config_bak_path", "deploy", "config_mapping_apps_name"}
-        keys_to_update = {k: v for k, v in self.__dict__.items() if k not in non_config_keys and v is not None}
-
-        if not os.path.exists(self.config_path):
-            error_msg = f"Config file {self.config_path} not found."
-            logger.error(error_msg)
-            return {"status": "error", "message": error_msg}
-
-        with open(self.config_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-        # 记录每个key最后一次出现的行号
-        last_occurrence = {}
-        for idx, line in enumerate(lines):
-            stripped = line.strip()
-            if not stripped or stripped.startswith(('#', ';')) or stripped.startswith('['):
-                continue
-            if '=' in stripped:
-                k = stripped.split('=', 1)[0].strip()
-                if k in keys_to_update:
-                    last_occurrence[k] = idx
-
-        # 更新已有参数（仅改最后一个出现的位置，保留原格式和行尾注释）
-        new_lines = lines[:]
-        for k in keys_to_update:
-            if k in last_occurrence:
-                idx = last_occurrence[k]
-                line = lines[idx]
-                prefix = line[:len(line) - len(line.lstrip())]
-
-                eq_pos = line.find('=')
-                if eq_pos != -1:
-                    key_part = line[len(prefix):eq_pos + 1]
-                    rhs = line[eq_pos + 1:]
-                    val_start_spaces = rhs[:len(rhs) - len(rhs.lstrip())]
-                    stripped_rhs = rhs.lstrip()
-
-                    comment_idx = len(stripped_rhs)
-                    for c in (';', '#'):
-                        p = stripped_rhs.find(c)
-                        if p != -1 and p < comment_idx:
-                            comment_idx = p
-
-                    val_and_padding = stripped_rhs[:comment_idx]
-                    new_val_str = str(keys_to_update[k])
-                    actual_old_val = val_and_padding.rstrip()
-                    trailing_padding = val_and_padding[len(actual_old_val):]
-                    after_part = stripped_rhs[comment_idx:]
-
-                    new_lines[idx] = f"{prefix}{key_part}{val_start_spaces}{new_val_str}{trailing_padding}{after_part}"
-
-        # 追加不存在的参数到文件末尾
-        existing_keys = set(last_occurrence.keys())
-        for k in keys_to_update:
-            if k not in existing_keys:
-                new_lines.append(f"{k} = {keys_to_update[k]}\n")
-
-        try:
-            with open(self.config_path, "w", encoding="utf-8") as f:
-                f.writelines(new_lines)
+        config_dict = {k: v for k, v in self.__dict__.items() if k not in non_config_keys}
+        success = update_config_file(self.config_path, config_dict, non_config_keys)
+        if success:
             logger.info(f"Dameng Config file {self.config_path} updated successfully.")
             logger.warning("Please restart the Dameng database to make the new configuration parameters take effect!")
             return {"status": "success", "message": f"Config file updated: {self.config_path}. Please restart the database to apply the new configuration."}
-        except Exception as e:
-            logger.error(f"Failed to update config file: {e}")
-            return {"status": "error", "message": f"Failed to update config file: {e}"}
+        else:
+            error_msg = f"Failed to update config file: {self.config_path}"
+            logger.error(error_msg)
+            return {"status": "error", "message": error_msg}
