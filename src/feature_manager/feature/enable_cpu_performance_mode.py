@@ -28,7 +28,7 @@ FEATURE_NAME = "enable_cpu_performance_mode"
 FEATURE_DES = "使能CPU高性能模式"
 
 
-@register_feature(scenarios=["boundary_gateway_appliance", "common", "opengauss_database"])
+@register_feature(scenarios=["boundary_gateway_appliance", "opengauss_database", "dameng_database", "common"])
 class EnableCPUPerformanceMode(BaseFeature):
     name: str = FEATURE_NAME
     cpufreq_default_governor: str = "performance"
