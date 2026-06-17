@@ -48,6 +48,7 @@ class CheckSMT2(BaseFeature):
         """显示SMT配置提示信息"""
         if is_new_920_mode:
             # 根据SMT2_status的值确定提示内容
+            logger.info("参考如下步骤配置SMT2")
             if SMT2_status == 'enable':
                 status_text = "设置为 Enabled(开启)"
             else:
@@ -77,6 +78,10 @@ class CheckSMT2(BaseFeature):
         # 配置参数
         SMT2_status = self.SMT2_status
         valid_statuses = ['disable', 'enable']  # 注意大小写
+        is_kvm = run_cmd('systemd-detect-virt', timeout=15)
+        if is_kvm != 'none':
+            logger.warning("当前环境为虚机，不支持SMT2配置")
+            return
         if SMT2_status not in valid_statuses:
             raise ValueError(f"参数校验错误: SMT2_status 必须是 '{' 或 '.join(valid_statuses)}'，当前值为 '{SMT2_status}'")
        
