@@ -68,7 +68,7 @@ def generate_yaml(features, feature_map, output_dir, generate_type, yaml_path=No
                     config_path = getattr(feature, "config_path")
                     if os.path.isfile(config_path):
                         base_name = os.path.basename(config_path)
-                        backup_path = os.path.join(output_dir, base_name + ".bak")
+                        backup_path = os.path.abspath(os.path.join(output_dir, base_name + ".bak"))
                         try:
                             shutil.copy2(config_path, backup_path)
                             logger.info(f"Config file {config_path} has been backed up to {backup_path}")
