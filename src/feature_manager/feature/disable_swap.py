@@ -26,7 +26,7 @@ FEATURE_NAME = "disable_swap"
 FEATURE_DES = "禁用交换内存"
 
 
-@register_feature(scenarios=["boundary_gateway_appliance", "common", "kingbase_database"])
+@register_feature(scenarios=["boundary_gateway_appliance", "kingbase_database", "dameng_database", "common"])
 class DisableSwap(BaseFeature):
     name: str = FEATURE_NAME
     swappiness: int = 0

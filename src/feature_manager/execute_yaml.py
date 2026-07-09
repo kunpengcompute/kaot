@@ -43,7 +43,7 @@ def run_execute(args, output_dir):
         base_feature_config = {feat_name: base_feature}
         target_feature_config = {feat_name: target_feature}
         same_flag = is_features_config_equal(
-            base_feature_config, target_feature_config, exclude_attrs=["deploy"]
+            base_feature_config, target_feature_config, exclude_attrs=["deploy", "config_bak_path"]
         )
         logger.debug(f"{feat_name} same_flag is : {same_flag}")
         deploy = target_feature.deploy
@@ -138,7 +138,7 @@ def check_features_and_generate_base(args, output_dir):
     logger.debug(f"update_target_map: {update_target_map}")
     logger.debug(f"update_base_map: {update_base_map}")
     same_flag = is_features_config_equal(
-        update_base_map, update_target_map, exclude_attrs=["deploy"]
+        update_base_map, update_target_map, exclude_attrs=["deploy", "config_bak_path"]
     )
     if same_flag:
         logger.warning(

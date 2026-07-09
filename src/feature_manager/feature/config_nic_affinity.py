@@ -30,7 +30,7 @@ FEATURE_NAME = "config_nic_affinity"
 FEATURE_DES = "配置多网卡中断绑核"
 
 
-@register_feature(scenarios=["kingbase_database", "common"])
+@register_feature(scenarios=["kingbase_database", "dameng_database", "common"])
 class ConfigNicAffinity(BaseFeature):
     name: str = FEATURE_NAME
     deploy: str = "NA"  # NA | Y
@@ -301,12 +301,12 @@ class ConfigNicAffinity(BaseFeature):
         try:
             with open(filename, 'w') as f:
                 json.dump(self._current_nic_affinities, f, indent=2)
-            logger.info(f"Saved NIC IRQ affinities to {filename}")
+            logger.debug(f"Saved NIC IRQ affinities to {filename}")
             self.nic_policies = filename
         except Exception as e:
             logger.warning(f"Failed to save NIC affinities: {e}")
         config = self.model_dump()
-        logger.info("Current NIC IRQ affinity snapshot captured.")
+        logger.debug("Current NIC IRQ affinity snapshot captured.")
         return config
     
     def pre_generate_config(self):
@@ -511,7 +511,7 @@ class ConfigNicAffinity(BaseFeature):
             try:
                 with open(path, "w") as f:
                     f.write(cpu_str)
-                logger.info(f"Bound {nic} IRQ {irq_num} ({irq_name}) → CPUs: {cpu_str}")
+                logger.debug(f"Bound {nic} IRQ {irq_num} ({irq_name}) → CPUs: {cpu_str}")
             except PermissionError:
                 raise RuntimeError("Permission denied. Run as root.")
             except Exception as e:
@@ -531,7 +531,7 @@ class ConfigNicAffinity(BaseFeature):
         """
         if self.irqbalance_status == "enabled":
             run_cmd(["systemctl", "restart", "irqbalance"], check=False)
-            run_cmd(["systemctl", "enabled", "irqbalance"], check=False)
+            run_cmd(["systemctl", "enable", "irqbalance"], check=False)
             return
         
         # 校验并分析策略
@@ -590,7 +590,7 @@ class ConfigNicAffinity(BaseFeature):
         try:
             with open(path, "w") as f:
                 f.write(cpu_str)
-            logger.info(f"Bound {nic} IRQ {irq_num} ({irq_name}) → CPUs: {cpu_str}")
+            logger.debug(f"Bound {nic} IRQ {irq_num} ({irq_name}) → CPUs: {cpu_str}")
         except PermissionError:
             raise RuntimeError("Permission denied. Run as root.")
         except Exception as e:

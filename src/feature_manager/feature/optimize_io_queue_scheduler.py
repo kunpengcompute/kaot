@@ -19,7 +19,6 @@ from src.feature_manager.feature import register_feature
 from src.feature_manager.feature.base import BaseFeature
 from typing import Dict, Any
 from src.utils.log import get_logger
-import shlex
 
 logger = get_logger(__name__)
 
@@ -28,22 +27,25 @@ FEATURE_NAME = "optimize_io_queue_scheduler"
 FEATURE_DES = "优化磁盘IO调度策略"
 
 
-@register_feature(scenarios=["kingbase_database"])
+@register_feature(scenarios=["kingbase_database", "dameng_database"])
 class OptimizeIOQueueScheduler(BaseFeature):
     name: str = FEATURE_NAME
     io_queue_scheduler: dict = {}  # {disk: scheduler}
 
     def get_current_config(self) -> dict:
         """
-        查询所有磁盘的调度策略，返回feature配置字典。
+        查询所有SSD磁盘的调度策略，返回feature配置字典。
+        只返回SSD磁盘，HDD磁盘不包含在配置中。
         """
         self.deploy = "NA"
         schedulers = {}
         try:
-            # 获取所有块设备（过滤掉loop、ram等）
             lsblk_proc = subprocess.run(["lsblk", "-dn", "-o", "NAME,TYPE"], capture_output=True, text=True, check=False)
             disks = [line.split()[0] for line in lsblk_proc.stdout.strip().splitlines() if line.strip() and line.split()[1] == "disk"]
             for disk in disks:
+                if not self._is_ssd(disk):
+                    logger.debug(f"Disk {disk} is HDD, skipped in get_current_config.")
+                    continue
                 path = f"/sys/block/{disk}/queue/scheduler"
                 try:
                     with open(path, "r") as f:
@@ -55,6 +57,7 @@ class OptimizeIOQueueScheduler(BaseFeature):
                             current_scheduler = s[1:-1]
                             break
                     schedulers[disk] = current_scheduler or "unknown"
+                    logger.debug(f"Disk {disk} is SSD, current scheduler '{schedulers[disk]}'.")
                 except Exception as e:
                     logger.warning(f"Failed to get IO scheduler for {disk}: {e}")
                     schedulers[disk] = "unknown"
@@ -65,27 +68,46 @@ class OptimizeIOQueueScheduler(BaseFeature):
         logger.debug(f"Optimization Item {self.name} current config yaml is generated")
         return config
 
+    def _is_ssd(self, disk: str) -> bool:
+        """
+        判断磁盘是否为SSD。
+        优先通过rotational判断，其次通过discard_granularity（TRIM支持）判断。
+        """
+        try:
+            rotational_path = f"/sys/block/{disk}/queue/rotational"
+            with open(rotational_path, "r") as f:
+                is_rotational = f.read().strip()
+            if is_rotational == "0":
+                logger.info(f"Disk {disk} rotational=0, identified as SSD.")
+                return True
+        except Exception as e:
+            logger.warning(f"Failed to read rotational for {disk}: {e}")
+
+        try:
+            discard_path = f"/sys/block/{disk}/queue/discard_granularity"
+            with open(discard_path, "r") as f:
+                discard_gran = f.read().strip()
+            if discard_gran and int(discard_gran) > 0:
+                logger.info(f"Disk {disk} supports TRIM (discard_granularity={discard_gran}), identified as SSD.")
+                return True
+        except Exception as e:
+            logger.warning(f"Failed to read discard_granularity for {disk}: {e}")
+
+        return False
+
     def pre_generate_config(self):
         """
-        获取所有磁盘的调度策略，识别SSD并将其调度策略设为none。
+        获取所有SSD磁盘的调度策略，将其调度策略设为none。
         """
         logger.info("Starting pre_generate_config for io_queue_scheduler.")
         config = self.get_current_config()
         schedulers = config.get("io_queue_scheduler", {})
-        # 识别SSD: 通过/sys/block/{disk}/queue/rotational，0为SSD，1为HDD
-        for disk in schedulers.keys():
-            try:
-                rotational_path = f"/sys/block/{disk}/queue/rotational"
-                with open(rotational_path, "r") as f:
-                    is_rotational = f.read().strip()
-                if is_rotational == "0":
-                    self.io_queue_scheduler[disk] = "none"
-                    logger.info(f"Disk {disk} is SSD, set scheduler to 'none'.")
-                else:
-                    self.io_queue_scheduler[disk] = schedulers[disk]
-            except Exception as e:
-                logger.warning(f"Failed to determine disk type for {disk}: {e}")
-                self.io_queue_scheduler[disk] = schedulers[disk]
+        for disk, current_scheduler in schedulers.items():
+            self.io_queue_scheduler[disk] = "none"
+            if current_scheduler == "none":
+                logger.info(f"Disk {disk} is SSD and scheduler already 'none'.")
+            else:
+                logger.info(f"Disk {disk} is SSD, current scheduler '{current_scheduler}', target scheduler 'none'.")
     
     def generate_config(self) -> Dict[str, Any]:
         """
@@ -104,31 +126,17 @@ class OptimizeIOQueueScheduler(BaseFeature):
         """
         schedulers = self.io_queue_scheduler
         if not schedulers or not isinstance(schedulers, dict):
-            logger.warning("The 'io_queue_scheduler' parameter is missing or invalid.")
+            logger.info("No SSD disks found, no optimization needed.")
             return {
-                "status": "error",
-                "message": "Missing or invalid parameter: io_queue_scheduler",
+                "status": "success",
+                "message": "No SSD disks found.",
             }
-        
-        # 识别SSD盘
-        ssd_disks = []
-        for disk in schedulers.keys():
-            rotational_path = f"/sys/block/{disk}/queue/rotational"
-            try:
-                with open(rotational_path, "r") as f:
-                    is_rotational = f.read().strip()
-                if is_rotational == "0":
-                    ssd_disks.append(disk)
-            except Exception:
-                pass
         
         # 创建udev规则文件
         udev_rule_path = "/etc/udev/rules.d/io-queue-scheduler.rules"
         try:
             with open(udev_rule_path, "w") as f:
-                for disk in ssd_disks:
-                    value = schedulers[disk]
-                    # 写入udev规则
+                for disk, value in schedulers.items():
                     f.write(f'ACTION=="add", KERNEL=="{disk}", ATTR{{queue/scheduler}}="{value}"\n')
                     f.write(f'ACTION=="change", KERNEL=="{disk}", ATTR{{queue/scheduler}}="{value}"\n')
             logger.info(f"Udev rules written to {udev_rule_path}")
@@ -162,8 +170,7 @@ class OptimizeIOQueueScheduler(BaseFeature):
         
         # 对当前存在的SSD应用规则
         results = {}
-        for disk in ssd_disks:
-            value = schedulers[disk]
+        for disk, value in schedulers.items():
             try:
                 trigger_result = subprocess.run(
                     ["udevadm", "trigger", "--name-match=" + disk],
