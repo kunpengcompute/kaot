@@ -1,6 +1,6 @@
 # KAOT WebUI
 
-KAOT（Kunpeng Ascend Optimization Tool）的可视化调优界面，提供场景选择、调优项执行、配置文件管理等功能。
+KAOT（Kunpeng & Ascend Optimization Tool）的可视化调优界面，提供场景选择、调优项执行、配置文件管理等功能。
 
 ## 核心特性
 
