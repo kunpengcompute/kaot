@@ -5,7 +5,6 @@ Provides parameter lookup and config file update logic for Kingbase, OpenGauss, 
 """
 import os
 import logging
-import shlex
 import subprocess
 
 logger = logging.getLogger(__name__)
@@ -44,42 +43,25 @@ def find_gs_bin(bin_name="gs_ctl"):
 def restart_opengauss_db(config_path, timeout=120):
     """重启 openGauss 数据库，使 postmaster 级参数生效。
 
-    DN 目录取配置文件的父目录。openGauss 要求以实例属主(通常是 omm)运行 gs_ctl：
-    若当前是 root 且 DN 属主为非 root 用户，则用 su - <属主> 包裹执行。
+    DN 目录取配置文件的父目录。
     :return: (ok: bool, message: str)
     """
-    import pwd
     dn = os.path.dirname(config_path)
     gs_ctl = find_gs_bin("gs_ctl")
     if not gs_ctl:
         logger.warning("gs_ctl not found. Please restart the OpenGauss database manually (gs_ctl restart).")
         return False, f"gs_ctl not found; restart manually: gs_ctl restart -D {dn}"
-    # 从 gs_ctl 路径推导 lib 目录
-    gs_bin_dir = os.path.dirname(gs_ctl)
-    lib_dir = os.path.join(os.path.dirname(gs_bin_dir), "lib")
-    lib_export = f"export LD_LIBRARY_PATH={shlex.quote(lib_dir)}"
-    cmd_str = f"{lib_export}; {shlex.quote(gs_ctl)} restart -D {shlex.quote(dn)}"
     try:
-        owner = pwd.getpwuid(os.stat(dn).st_uid).pw_name
-    except Exception:
-        owner = None
-    try:
-        if os.geteuid() == 0 and owner and owner != "root":
-            full_cmd = f"su - {shlex.quote(owner)} -c {shlex.quote(cmd_str)}"
-            result = subprocess.run(
-                full_cmd, shell=True, capture_output=True, text=True, timeout=timeout, check=False,
-                env={**os.environ, "LANG": "C"},
-            )
-        else:
-            result = subprocess.run(
-                cmd_str, shell=True, capture_output=True, text=True, timeout=timeout, check=False,
-                env={**os.environ, "LANG": "C"},
-            )
+        result = subprocess.run(
+            [gs_ctl, "restart", "-D", dn],
+            capture_output=True, text=True, timeout=timeout, check=False,
+            env={**os.environ, "LANG": "C"},
+        )
         if result.returncode == 0:
             logger.info(f"Restarted OpenGauss via {gs_ctl} -D {dn}")
             return True, "Restart OK."
-        logger.error(f"gs_ctl restart failed: {result.stderr or result.stdout}")
-        return False, f"gs_ctl restart failed: {(result.stderr or result.stdout).strip()}"
+        logger.error(f"gs_ctl restart failed: {result.stderr}")
+        return False, f"gs_ctl restart failed: {result.stderr}"
     except Exception as e:
         logger.exception(f"Failed to restart OpenGauss: {e}")
         return False, f"Restart exception: {e}"
