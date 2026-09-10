@@ -133,42 +133,35 @@ class OptimizeOpenGaussDatabaseConfig(BaseFeature):
         调用db_config_utils工具写回配置文件。
         postmaster 级参数若被改动，则自动重启数据库以生效。
         """
-        # 校验并自适应 thread_pool_attr 的 cpubind：最高核号 > 实际核数时 clamp 到 cpu_count-1
-        # （防 CPU 少的机器因越界绑核导致实例启动失败）
-        import re as _re
+        # 校验 thread_pool_attr 的 cpubind 核号不超当前 CPU 数（防实例起不来）
         tpa = getattr(self, "thread_pool_attr", None)
-        if tpa and _re.search(r"cpubind:", str(tpa)):
-            total = os.cpu_count() or 128
-            max_cpu = total - 1
-            text = str(tpa)
-            over = False
-            # 解析所有显式核号，判断是否越界
-            for part in _re.findall(r"cpubind:([\d,\-]+)", text)[0].split(","):
-                part = part.strip()
-                if not part:
-                    continue
-                if "-" in part:
-                    a, b = part.split("-")
-                    if int(b.rstrip()) > max_cpu:
-                        over = True
-                        break
-                else:
-                    if int(part) > max_cpu:
-                        over = True
-                        break
-            if over:
-                # clamp cpubind 上限到 max_cpu（保留格式：0-X）
-                try:
-                    orig = _re.search(r"cpubind:([\d,\-]+)", text).group(1)
-                    new_bind = "0-{0}".format(max_cpu)
-                    text = text.replace(orig, new_bind, 1)
-                    self.__dict__["thread_pool_attr"] = text
-                    logger.warning(
-                        f"thread_pool_attr cpubind {orig} exceeds {total} CPUs; "
-                        f"clamped to {new_bind} to avoid DB start failure."
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to clamp thread_pool_attr: {e}")
+        if tpa:
+            import re as _re
+            m = _re.search(r"cpubind:([\d,\-]+)", str(tpa))
+            if m:
+                cpus = set()
+                for part in m.group(1).split(","):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    if "-" in part:
+                        a, b = part.split("-")
+                        try:
+                            cpus.update(range(int(a), int(b) + 1))
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            cpus.add(int(part))
+                        except Exception:
+                            pass
+                total = os.cpu_count() or 0
+                over = [c for c in sorted(cpus) if c >= total]
+                if over:
+                    return {
+                        "status": "error",
+                        "message": f"thread_pool_attr cpubind includes out-of-range CPUs {over} (this host has {total} CPUs). Abort to avoid DB start failure.",
+                    }
 
         non_config_keys = {
             "name", "config_path", "config_bak_path", "deploy",
