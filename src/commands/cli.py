@@ -46,7 +46,7 @@ def load_commands():
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="kaot", description="KunPeng & Ascend Auto Optimization Tool"
+        prog="kaot", description="Kunpeng & Ascend Optimization Tool"
     )
 
     subparsers = parser.add_subparsers(dest="command", title="Subcommands")
