@@ -5,6 +5,7 @@ Provides parameter lookup and config file update logic for Kingbase, OpenGauss, 
 """
 import os
 import logging
+import shlex
 import subprocess
 
 logger = logging.getLogger(__name__)
@@ -40,31 +41,55 @@ def find_gs_bin(bin_name="gs_ctl"):
     return None
 
 
-def restart_opengauss_db(config_path, timeout=120):
-    """重启 openGauss 数据库，使 postmaster 级参数生效。
-
-    DN 目录取配置文件的父目录。
+def _run_gsctl(config_path, action, timeout=120):
+    """以实例属主身份执行 gs_ctl <action> -D <DN>。
+    action: "restart" | "reload"
     :return: (ok: bool, message: str)
     """
+    import pwd
     dn = os.path.dirname(config_path)
     gs_ctl = find_gs_bin("gs_ctl")
     if not gs_ctl:
-        logger.warning("gs_ctl not found. Please restart the OpenGauss database manually (gs_ctl restart).")
-        return False, f"gs_ctl not found; restart manually: gs_ctl restart -D {dn}"
+        logger.warning(f"gs_ctl not found. Please run 'gs_ctl {action} -D {dn}' manually.")
+        return False, f"gs_ctl not found; please run manually: gs_ctl {action} -D {dn}"
+    gs_bin_dir = os.path.dirname(gs_ctl)
+    lib_dir = os.path.join(os.path.dirname(gs_bin_dir), "lib")
+    lib_export = f"export LD_LIBRARY_PATH={shlex.quote(lib_dir)}"
+    cmd_str = f"{lib_export}; {shlex.quote(gs_ctl)} {action} -D {shlex.quote(dn)}"
     try:
-        result = subprocess.run(
-            [gs_ctl, "restart", "-D", dn],
-            capture_output=True, text=True, timeout=timeout, check=False,
-            env={**os.environ, "LANG": "C"},
-        )
+        owner = pwd.getpwuid(os.stat(dn).st_uid).pw_name
+    except Exception:
+        owner = None
+    try:
+        if os.geteuid() == 0 and owner and owner != "root":
+            full_cmd = f"su - {shlex.quote(owner)} -c {shlex.quote(cmd_str)}"
+            result = subprocess.run(
+                full_cmd, shell=True, capture_output=True, text=True, timeout=timeout, check=False,
+                env={**os.environ, "LANG": "C"},
+            )
+        else:
+            result = subprocess.run(
+                cmd_str, shell=True, capture_output=True, text=True, timeout=timeout, check=False,
+                env={**os.environ, "LANG": "C"},
+            )
         if result.returncode == 0:
-            logger.info(f"Restarted OpenGauss via {gs_ctl} -D {dn}")
-            return True, "Restart OK."
-        logger.error(f"gs_ctl restart failed: {result.stderr}")
-        return False, f"gs_ctl restart failed: {result.stderr}"
+            logger.info(f"gs_ctl {action} via {gs_ctl} -D {dn} OK")
+            return True, f"{action} OK."
+        logger.error(f"gs_ctl {action} failed: {result.stderr or result.stdout}")
+        return False, f"gs_ctl {action} failed: {(result.stderr or result.stdout).strip()}"
     except Exception as e:
-        logger.exception(f"Failed to restart OpenGauss: {e}")
-        return False, f"Restart exception: {e}"
+        logger.exception(f"Failed to {action} OpenGauss: {e}")
+        return False, f"{action} exception: {e}"
+
+
+def restart_opengauss_db(config_path, timeout=120):
+    """重启 openGauss 数据库，使 postmaster 级参数生效。DN 目录取配置文件的父目录。"""
+    return _run_gsctl(config_path, "restart", timeout=timeout)
+
+
+def reload_opengauss_db(config_path, timeout=120):
+    """重载(reload/SIGHUP) openGauss 配置，使普通(sighup 级)参数生效，无需重启。"""
+    return _run_gsctl(config_path, "reload", timeout=timeout)
 
 def get_config_file_lines(config_path):
     """Read config file lines, return list."""
