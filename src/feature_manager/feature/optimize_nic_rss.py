@@ -33,6 +33,10 @@ def _sub_env():
     return {**os.environ, "LANG": "C"}
 
 
+def _run_ethtool(args: list):
+    return subprocess.run(args, capture_output=True, text=True, check=False, env=_sub_env())
+
+
 @register_feature(scenarios=["opengauss_database", "kingbase_database", "dameng_database", "common"])
 class OptimizeNicRss(BaseFeature):
     name: str = FEATURE_NAME
@@ -54,6 +58,27 @@ class OptimizeNicRss(BaseFeature):
             return None
         return int(t)
 
+    @staticmethod
+    def _section_values(out, header, keys):
+        """解析 ethtool 输出中 header 段之后各 key 的取值，遇到下一个段头即停止。"""
+        result = {k: None for k in keys}
+        in_section = False
+        for line in out.splitlines():
+            s = line.strip()
+            if not s:
+                continue
+            if in_section:
+                for k in keys:
+                    if s.startswith(k + ":"):
+                        result[k] = s.split(":", 1)[1].strip()
+                        continue
+                if s.endswith(":") and not any(s.startswith(k + ":") for k in keys):
+                    break  # 进入下一个 section
+                continue
+            if s.startswith(header):
+                in_section = True
+        return result
+
     def _get_nic_limits(self, nic: str) -> tuple:
         """
         读取网卡硬件上限。返回 (rss_max, ring_rx_max, ring_tx_max, ring_supported)。
@@ -63,21 +88,12 @@ class OptimizeNicRss(BaseFeature):
         rss_max = ring_rx_max = ring_tx_max = None
         ring_support = True
 
+        header = "Pre-set maximums"
         try:
             out = subprocess.run(
                 ["ethtool", "-l", nic], capture_output=True, text=True, check=False, env=_sub_env(),
             ).stdout
-            # 只取 Pre-set maximums 段，跳过 Current
-            pre = out.split("Current hardware settings:", 1)[0]
-            if "Pre-set maximums" in pre:
-                in_pre = False
-                for line in pre.splitlines():
-                    s = line.strip()
-                    if s.startswith("Pre-set maximums"):
-                        in_pre = True
-                        continue
-                    if in_pre and s.startswith("Combined:"):
-                        rss_max = self._parse_value(s.split(":", 1)[1])
+            rss_max = self._parse_value(self._section_values(out, header, ["Combined"])["Combined"])
         except Exception as e:
             logger.warning(f"Failed to get RSS limits for {nic}: {e}")
 
@@ -85,20 +101,10 @@ class OptimizeNicRss(BaseFeature):
             out = subprocess.run(
                 ["ethtool", "-g", nic], capture_output=True, text=True, check=False, env=_sub_env(),
             ).stdout
-            pre = out.split("Current hardware settings:", 1)[0]
-            if "Pre-set maximums" in pre:
-                in_pre = False
-                for line in pre.splitlines():
-                    s = line.strip()
-                    if s.startswith("Pre-set maximums"):
-                        in_pre = True
-                        continue
-                    if in_pre:
-                        if s.startswith("RX:"):
-                            ring_rx_max = self._parse_value(s.split(":", 1)[1])
-                        elif s.startswith("TX:"):
-                            ring_tx_max = self._parse_value(s.split(":", 1)[1])
-            else:
+            ring = self._section_values(out, header, ["RX", "TX"])
+            ring_rx_max = self._parse_value(ring["RX"])
+            ring_tx_max = self._parse_value(ring["TX"])
+            if ring_rx_max is None and ring_tx_max is None:
                 ring_support = False  # ethtool -g 无可配置 ring -> 不支持
         except Exception as e:
             logger.warning(f"Failed to get ring limits for {nic}: {e}")
@@ -132,11 +138,9 @@ class OptimizeNicRss(BaseFeature):
             ).stdout
             for line in out.splitlines():
                 parts = line.split()
-                if len(parts) >= 2 and parts[1] == "UP":
-                    nic = parts[0]
-                    if nic == "lo":
-                        continue
-                    nic_speed[nic] = self._get_nic_speed(nic)
+                if len(parts) < 2 or parts[1] != "UP" or parts[0] == "lo":
+                    continue
+                nic_speed[parts[0]] = self._get_nic_speed(parts[0])
         except Exception as e:
             logger.warning(f"Failed to list NICs: {e}")
         if not nic_speed:
@@ -151,53 +155,48 @@ class OptimizeNicRss(BaseFeature):
         config = {"rss_combined": None, "ring_rx": None, "ring_tx": None}
         if self.auto_select and not self.nic:
             self.nic = self._auto_detect_nic()
+        if not self.nic:
+            logger.warning("No NIC detected; skip RSS current-config capture.")
+            return self._merge_config(config)
 
-        if self.nic:
-            # 探测硬件上限并保存到实例
-            (self.rss_max, self.ring_rx_max, self.ring_tx_max, self.ring_supported) = self._get_nic_limits(self.nic)
-            try:
-                combined = subprocess.run(
-                    ["ethtool", "-l", self.nic], capture_output=True, text=True, check=False,
-                    env=_sub_env(),
-                )
-                for line in combined.stdout.splitlines():
-                    s = line.strip()
-                    if s.startswith("Combined:"):
-                        config["rss_combined"] = s.split(":", 1)[1].strip()
-            except Exception as e:
-                logger.warning(f"Failed to get RSS for {self.nic}: {e}")
+        # 探测硬件上限并保存到实例
+        (self.rss_max, self.ring_rx_max, self.ring_tx_max, self.ring_supported) = self._get_nic_limits(self.nic)
+        current_header = "Current hardware settings"
+        try:
+            out = subprocess.run(
+                ["ethtool", "-l", self.nic], capture_output=True, text=True, check=False,
+                env=_sub_env(),
+            ).stdout
+            config["rss_combined"] = self._section_values(out, current_header, ["Combined"])["Combined"]
+        except Exception as e:
+            logger.warning(f"Failed to get RSS for {self.nic}: {e}")
 
-            try:
-                ring = subprocess.run(
-                    ["ethtool", "-g", self.nic], capture_output=True, text=True, check=False,
-                    env=_sub_env(),
-                )
-                cur = False
-                for line in ring.stdout.splitlines():
-                    s = line.strip()
-                    if s.startswith("Current hardware settings:"):
-                        cur = True
-                        continue
-                    if cur:
-                        if s.startswith("RX:"):
-                            config["ring_rx"] = s.split(":", 1)[1].strip()
-                        elif s.startswith("TX:"):
-                            config["ring_tx"] = s.split(":", 1)[1].strip()
-            except Exception as e:
-                logger.warning(f"Failed to get ring for {self.nic}: {e}")
+        try:
+            out = subprocess.run(
+                ["ethtool", "-g", self.nic], capture_output=True, text=True, check=False,
+                env=_sub_env(),
+            ).stdout
+            ring = self._section_values(out, "Current hardware settings", ["RX", "TX"])
+            config["ring_rx"] = ring["RX"]
+            config["ring_tx"] = ring["TX"]
+        except Exception as e:
+            logger.warning(f"Failed to get ring for {self.nic}: {e}")
 
         return self._merge_config(config)
 
+    @staticmethod
+    def _is_blank(value) -> bool:
+        return value is None or str(value).strip() == ""
+
     def _merge_config(self, current: dict) -> dict:
-        """当前无值(None)时回退到目标值，保证 YAML 字段非空且 base/target 可比。"""
-        self_vals = {
-            "rss_combined": None if current.get("rss_combined") is None else self.rss_combined,
-            "ring_rx": None if current.get("ring_rx") is None else self.ring_rx,
-            "ring_tx": None if current.get("ring_tx") is None else self.ring_tx,
+        """当前无值(None/空串)时回退到目标值，保证 YAML 字段非空且 base/target 可比。"""
+        merged = {
+            "rss_combined": self.rss_combined if not self._is_blank(current.get("rss_combined")) else None,
+            "ring_rx": self.ring_rx if not self._is_blank(current.get("ring_rx")) else None,
+            "ring_tx": self.ring_tx if not self._is_blank(current.get("ring_tx")) else None,
         }
-        merged = dict(self_vals)
         for k in current:
-            if current[k] is not None:
+            if not self._is_blank(current[k]):
                 merged[k] = current[k]
         self.__dict__["current_rss"] = current.get("rss_combined")
         self.__dict__["current_rx"] = current.get("ring_rx")
@@ -234,10 +233,7 @@ class OptimizeNicRss(BaseFeature):
         if rss_max is not None:
             rss_target = min(rss_target, rss_max)
         try:
-            r = subprocess.run(
-                ["ethtool", "-L", self.nic, "combined", str(rss_target)],
-                capture_output=True, text=True, check=False, env=_sub_env(),
-            )
+            r = _run_ethtool(["ethtool", "-L", self.nic, "combined", str(rss_target)])
             results["rss"] = {"desired": self.rss_combined, "applied": rss_target,
                               "hw_max": rss_max, "returncode": r.returncode, "stderr": r.stderr.strip()}
             logger.info(f"ethtool -L {self.nic} combined {rss_target} (desired {self.rss_combined}, hw_max {rss_max}): rc={r.returncode}")
@@ -255,10 +251,7 @@ class OptimizeNicRss(BaseFeature):
             if ring_tx_max is not None:
                 tx_target = min(tx_target, ring_tx_max)
             try:
-                r = subprocess.run(
-                    ["ethtool", "-G", self.nic, "rx", str(rx_target), "tx", str(tx_target)],
-                    capture_output=True, text=True, check=False, env=_sub_env(),
-                )
+                r = _run_ethtool(["ethtool", "-G", self.nic, "rx", str(rx_target), "tx", str(tx_target)])
                 results["ring"] = {"desired": [self.ring_rx, self.ring_tx],
                                    "applied": [rx_target, tx_target],
                                    "hw_max": [ring_rx_max, ring_tx_max],
