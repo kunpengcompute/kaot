@@ -6,7 +6,8 @@ Provides parameter lookup and config file update logic for Kingbase, OpenGauss, 
 import os
 import logging
 import shlex
-import subprocess
+
+from src.utils.common import run_cmd
 
 logger = logging.getLogger(__name__)
 
@@ -54,29 +55,23 @@ def _run_gsctl(config_path, action, timeout=120):
         return False, f"gs_ctl not found; please run manually: gs_ctl {action} -D {dn}"
     gs_bin_dir = os.path.dirname(gs_ctl)
     lib_dir = os.path.join(os.path.dirname(gs_bin_dir), "lib")
-    lib_export = f"export LD_LIBRARY_PATH={shlex.quote(lib_dir)}"
-    cmd_str = f"{lib_export}; {shlex.quote(gs_ctl)} {action} -D {shlex.quote(dn)}"
+    run_env = {"LD_LIBRARY_PATH": lib_dir}
     try:
         owner = pwd.getpwuid(os.stat(dn).st_uid).pw_name
     except Exception:
         owner = None
     try:
         if os.geteuid() == 0 and owner and owner != "root":
-            full_cmd = f"su - {shlex.quote(owner)} -c {shlex.quote(cmd_str)}"
-            result = subprocess.run(
-                full_cmd, shell=True, capture_output=True, text=True, timeout=timeout, check=False,
-                env={**os.environ, "LANG": "C"},
-            )
+            lib_export = f"export LD_LIBRARY_PATH={shlex.quote(lib_dir)}"
+            cmd_str = f"{lib_export}; {shlex.quote(gs_ctl)} {action} -D {shlex.quote(dn)}"
+            run_cmd(["su", "-", owner, "-c", cmd_str], timeout=timeout, check=True, env=run_env)
         else:
-            result = subprocess.run(
-                cmd_str, shell=True, capture_output=True, text=True, timeout=timeout, check=False,
-                env={**os.environ, "LANG": "C"},
-            )
-        if result.returncode == 0:
-            logger.info(f"gs_ctl {action} via {gs_ctl} -D {dn} OK")
-            return True, f"{action} OK."
-        logger.error(f"gs_ctl {action} failed: {result.stderr or result.stdout}")
-        return False, f"gs_ctl {action} failed: {(result.stderr or result.stdout).strip()}"
+            run_cmd([gs_ctl, action, "-D", dn], timeout=timeout, check=True, env=run_env)
+        logger.info(f"gs_ctl {action} via {gs_ctl} -D {dn} OK")
+        return True, f"{action} OK."
+    except RuntimeError as e:
+        logger.error(f"gs_ctl {action} failed: {e}")
+        return False, f"gs_ctl {action} failed: {e}"
     except Exception as e:
         logger.exception(f"Failed to {action} OpenGauss: {e}")
         return False, f"{action} exception: {e}"

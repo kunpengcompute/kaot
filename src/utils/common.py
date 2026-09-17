@@ -156,10 +156,12 @@ def validate_yaml_path_exist(file_name):
     return full_file_path
 
 
-def run_cmd(cmd: Union[str, List[str]], timeout: int = 10, check: bool = True, is_str: bool = False) -> str:
+def run_cmd(cmd: Union[str, List[str]], timeout: int = 10, check: bool = True, is_str: bool = False, env: Dict = None) -> str:
         try:
             my_env = os.environ.copy()
             my_env["LANG"] = "C"
+            if env:
+                my_env.update(env)
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=check, shell=is_str, env=my_env)
             return result.stdout.strip()
         except subprocess.TimeoutExpired:
