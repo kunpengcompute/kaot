@@ -5,8 +5,86 @@ Provides parameter lookup and config file update logic for Kingbase, OpenGauss, 
 """
 import os
 import logging
+import shlex
+
+from src.utils.common import run_cmd
 
 logger = logging.getLogger(__name__)
+
+
+def find_gs_bin(bin_name="gs_ctl"):
+    """探测 gs_ctl / gs_guc 可执行文件路径。
+
+    覆盖常见安装目录；未命中返回 None（供调用方区分“未找到”与 PATH 兜底）。
+    """
+    candidates = [
+        f"/opt/huawei/install/app/bin/{bin_name}",
+        f"/usr/local/bin/{bin_name}",
+        f"/usr/bin/{bin_name}",
+        # 常见手动/OM 安装路径（通配 openGauss 安装根下的 app_* / app）
+        f"/home/openGauss/install/app/bin/{bin_name}",
+        f"/home/openGauss/app/bin/{bin_name}",
+        f"/home/opengauss/app/bin/{bin_name}",
+        f"/opt/openGauss/bin/{bin_name}",
+    ]
+    # 枚举 /home/openGauss/install 下的 app_* 目录
+    for base in ("/home/openGauss/install", "/home/openGauss", "/home/opengauss", "/opt/openGauss", "/opt/huawei/install"):
+        try:
+            for entry in sorted(os.listdir(base)):
+                p = os.path.join(base, entry, "bin", bin_name)
+                if os.path.isfile(p):
+                    return p
+        except OSError:
+            continue
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def _run_gsctl(config_path, action, timeout=120):
+    """以实例属主身份执行 gs_ctl <action> -D <DN>。
+    action: "restart" | "reload"
+    :return: (ok: bool, message: str)
+    """
+    import pwd
+    dn = os.path.dirname(config_path)
+    gs_ctl = find_gs_bin("gs_ctl")
+    if not gs_ctl:
+        logger.warning(f"gs_ctl not found. Please run 'gs_ctl {action} -D {dn}' manually.")
+        return False, f"gs_ctl not found; please run manually: gs_ctl {action} -D {dn}"
+    gs_bin_dir = os.path.dirname(gs_ctl)
+    lib_dir = os.path.join(os.path.dirname(gs_bin_dir), "lib")
+    run_env = {"LD_LIBRARY_PATH": lib_dir}
+    try:
+        owner = pwd.getpwuid(os.stat(dn).st_uid).pw_name
+    except Exception:
+        owner = None
+    try:
+        if os.geteuid() == 0 and owner and owner != "root":
+            lib_export = f"export LD_LIBRARY_PATH={shlex.quote(lib_dir)}"
+            cmd_str = f"{lib_export}; {shlex.quote(gs_ctl)} {action} -D {shlex.quote(dn)}"
+            run_cmd(["su", "-", owner, "-c", cmd_str], timeout=timeout, check=True, env=run_env)
+        else:
+            run_cmd([gs_ctl, action, "-D", dn], timeout=timeout, check=True, env=run_env)
+        logger.info(f"gs_ctl {action} via {gs_ctl} -D {dn} OK")
+        return True, f"{action} OK."
+    except RuntimeError as e:
+        logger.error(f"gs_ctl {action} failed: {e}")
+        return False, f"gs_ctl {action} failed: {e}"
+    except Exception as e:
+        logger.exception(f"Failed to {action} OpenGauss: {e}")
+        return False, f"{action} exception: {e}"
+
+
+def restart_opengauss_db(config_path, timeout=120):
+    """重启 openGauss 数据库，使 postmaster 级参数生效。DN 目录取配置文件的父目录。"""
+    return _run_gsctl(config_path, "restart", timeout=timeout)
+
+
+def reload_opengauss_db(config_path, timeout=120):
+    """重载(reload/SIGHUP) openGauss 配置，使普通(sighup 级)参数生效，无需重启。"""
+    return _run_gsctl(config_path, "reload", timeout=timeout)
 
 def get_config_file_lines(config_path):
     """Read config file lines, return list."""
