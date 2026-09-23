@@ -109,7 +109,8 @@ class HugePageDisableFeature(BaseFeature):
             def line_exists(pattern: str) -> bool:
                 result = subprocess.run(
                     ["grep", "-qE", pattern, SERVICE_PATH],
-                    capture_output=True
+                    capture_output=True,
+                    timeout=30
                 )
                 return result.returncode == 0
 

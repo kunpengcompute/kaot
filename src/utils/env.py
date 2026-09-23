@@ -53,7 +53,8 @@ def get_cpu_info() -> str:
             capture_output=True,
             text=True,
             encoding="utf-8",
-            check=True
+            check=True,
+            timeout=30
         )
         output_lines = [
             line.strip() for line in result.stdout.splitlines()

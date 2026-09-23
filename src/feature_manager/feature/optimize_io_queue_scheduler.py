@@ -40,7 +40,7 @@ class OptimizeIOQueueScheduler(BaseFeature):
         self.deploy = "NA"
         schedulers = {}
         try:
-            lsblk_proc = subprocess.run(["lsblk", "-dn", "-o", "NAME,TYPE"], capture_output=True, text=True, check=False)
+            lsblk_proc = subprocess.run(["lsblk", "-dn", "-o", "NAME,TYPE"], capture_output=True, text=True, check=True, timeout=30)
             disks = [line.split()[0] for line in lsblk_proc.stdout.strip().splitlines() if line.strip() and line.split()[1] == "disk"]
             for disk in disks:
                 if not self._is_ssd(disk):
@@ -153,7 +153,8 @@ class OptimizeIOQueueScheduler(BaseFeature):
                 ["udevadm", "control", "--reload-rules"],
                 capture_output=True,
                 text=True,
-                check=False
+                check=False,
+                timeout=30
             )
             if reload_result.returncode != 0:
                 logger.error(f"Failed to reload udev rules: {reload_result.stderr}")
@@ -176,7 +177,8 @@ class OptimizeIOQueueScheduler(BaseFeature):
                     ["udevadm", "trigger", "--name-match=" + disk],
                     capture_output=True,
                     text=True,
-                    check=False
+                    check=False,
+                    timeout=30
                 )
                 if trigger_result.returncode == 0:
                     logger.info(f"IO scheduler for {disk} set to {value} successfully via udev rule.")

@@ -34,7 +34,7 @@ def _sub_env():
 
 
 def _run_ethtool(args: list):
-    return subprocess.run(args, capture_output=True, text=True, check=False, env=_sub_env())
+    return subprocess.run(args, capture_output=True, text=True, check=False, env=_sub_env(), timeout=30)
 
 
 @register_feature(scenarios=["opengauss_database", "kingbase_database", "dameng_database", "common"])
@@ -92,6 +92,7 @@ class OptimizeNicRss(BaseFeature):
         try:
             out = subprocess.run(
                 ["ethtool", "-l", nic], capture_output=True, text=True, check=False, env=_sub_env(),
+                timeout=30,
             ).stdout
             rss_max = self._parse_value(self._section_values(out, header, ["Combined"])["Combined"])
         except Exception as e:
@@ -100,6 +101,7 @@ class OptimizeNicRss(BaseFeature):
         try:
             out = subprocess.run(
                 ["ethtool", "-g", nic], capture_output=True, text=True, check=False, env=_sub_env(),
+                timeout=30,
             ).stdout
             ring = self._section_values(out, header, ["RX", "TX"])
             ring_rx_max = self._parse_value(ring["RX"])
@@ -120,7 +122,8 @@ class OptimizeNicRss(BaseFeature):
         """通过 ethtool 读取网卡带宽(Mb/s)，失败返回 -1。"""
         try:
             out = subprocess.run(
-                ["ethtool", nic], capture_output=True, text=True, check=False, env=_sub_env()
+                ["ethtool", nic], capture_output=True, text=True, check=False, env=_sub_env(),
+                timeout=30,
             ).stdout
             m = re.search(r"Speed:\s*(\d+)", out)
             return int(m.group(1)) if m else -1
@@ -134,7 +137,7 @@ class OptimizeNicRss(BaseFeature):
         try:
             out = subprocess.run(
                 ["ip", "-br", "link", "show"], capture_output=True, text=True, check=False,
-                env=_sub_env(),
+                env=_sub_env(), timeout=30,
             ).stdout
             for line in out.splitlines():
                 parts = line.split()
@@ -165,7 +168,7 @@ class OptimizeNicRss(BaseFeature):
         try:
             out = subprocess.run(
                 ["ethtool", "-l", self.nic], capture_output=True, text=True, check=False,
-                env=_sub_env(),
+                env=_sub_env(), timeout=30,
             ).stdout
             config["rss_combined"] = self._section_values(out, current_header, ["Combined"])["Combined"]
         except Exception as e:
@@ -174,7 +177,7 @@ class OptimizeNicRss(BaseFeature):
         try:
             out = subprocess.run(
                 ["ethtool", "-g", self.nic], capture_output=True, text=True, check=False,
-                env=_sub_env(),
+                env=_sub_env(), timeout=30,
             ).stdout
             ring = self._section_values(out, "Current hardware settings", ["RX", "TX"])
             config["ring_rx"] = ring["RX"]

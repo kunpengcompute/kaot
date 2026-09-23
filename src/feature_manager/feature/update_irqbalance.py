@@ -43,6 +43,7 @@ class UpdateIrqBalance(BaseFeature):
             capture_output=True,
             text=True,
             check=False,
+            timeout=30,
         )
         status = (proc.stdout or proc.stderr or "").strip() or "unknown"
 
@@ -77,6 +78,7 @@ class UpdateIrqBalance(BaseFeature):
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=30,
             )
             logger.info("Command executed successfully: %s", " ".join(command_start_stop))
             
@@ -86,6 +88,7 @@ class UpdateIrqBalance(BaseFeature):
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=30,
             )
             logger.info("Command executed successfully: %s", " ".join(command_enable_disable))
             

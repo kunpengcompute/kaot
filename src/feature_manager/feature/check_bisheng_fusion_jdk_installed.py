@@ -31,7 +31,7 @@ SAME_AS_FUSION_VERSION = "Current JDK version is BiShengJDK Fusion"
 
 def parse_jdk_info():
     try:
-        proc = subprocess.run(["java", "-version"], capture_output=True, text=True, check=False)
+        proc = subprocess.run(["java", "-version"], capture_output=True, text=True, check=False, timeout=30)
         output = (proc.stdout or "") + (proc.stderr or "")
         lines = [l.strip() for l in output.splitlines() if l.strip()]
         result = {"jdk_name": "unknown", "jdk_version": "unknown", "compatibility": UNKNOWN_COMPATIBILITY}

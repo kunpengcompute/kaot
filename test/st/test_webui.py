@@ -187,7 +187,8 @@ class TestPythonSyntax:
         result = subprocess.run(
             [sys.executable, "-m", "py_compile", str(py_file)],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=30
         )
         
         assert result.returncode == 0, f"Python语法错误: {result.stderr}"
