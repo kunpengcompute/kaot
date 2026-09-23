@@ -16,8 +16,28 @@
 # ===========================================================================
 import argparse
 import importlib
+import os
 import pkgutil
+import sys
 from src.commands import __path__ as commands_path
+
+
+def check_root_privilege():
+    """
+    主入口权限校验：kaot 大部分功能依赖 root 权限（IRQ 亲和性、sched_rt_runtime、
+    hugepages、sysctl/systemctl 等），非 root 下这些操作会被静默跳过或失败。
+    一旦非 root 运行，直接报错退出，避免使用者误以为执行成功。
+    """
+    geteuid = getattr(os, "geteuid", None)
+    if geteuid is not None and geteuid() != 0:
+        print(
+            "ERROR: kaot must be run as root (euid=0), current euid={cdui}. "
+            "System-level optimizations (IRQ affinity, sched_rt_runtime, hugepages, "
+            "sysctl/systemctl, install) require root privileges. "
+            "Please re-run with sudo or as root.".format(cdui=geteuid()),
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 def load_commands():
@@ -45,6 +65,8 @@ def load_commands():
 
 
 def main():
+    check_root_privilege()
+
     parser = argparse.ArgumentParser(
         prog="kaot", description="Kunpeng & Ascend Optimization Tool"
     )

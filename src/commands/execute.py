@@ -17,6 +17,7 @@
 import argparse
 import datetime
 import os
+import sys
 from src.commands.generate import (
     FEATURE_INDEX_CHOICES,
     build_help,
@@ -84,4 +85,10 @@ def run(args):
     init_logger(level=args.log, log_file=log_path)
     validate_yaml_name(args.target_file_name)
     args.target_file_name = validate_yaml_path_exist(args.target_file_name)
-    run_execute(args, output_dir)
+    try:
+        run_execute(args, output_dir)
+    except SystemExit:
+        raise
+    except Exception as e:
+        logger.error(f"execute failed: {e}")
+        sys.exit(1)

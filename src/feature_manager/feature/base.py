@@ -54,8 +54,15 @@ class BaseFeature(BaseModel):
     def apply_config(self):
         """
         基类实现：模板方法（固定执行流程）
+
+        :return: 应用结果字典，形如 {"status": "success|warning|error", "message": str}。
+                 子类 _apply_config_impl 未返回时默认为 success，供上层调用方（execute_yaml）
+                 消费状态以判断是否真正生效，避免静默失败。
         """
         logger.info(
             f"Optimization Item {self.name} config validation passed, starting to apply..."
         )
-        self._apply_config_impl()
+        result = self._apply_config_impl()
+        if result is None:
+            result = {"status": "success", "message": f"{self.name} applied successfully."}
+        return result

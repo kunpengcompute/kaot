@@ -55,23 +55,35 @@ def run_execute(args, output_dir):
         if deploy == "Y" and not same_flag:
             logger.info(f"start apply config Optimization Item: {feat_name}")
             try:
-                target_feature.apply_config()
-                logger.info(f"Applied {feat_name} configuration successful.")
+                apply_result = target_feature.apply_config()
+                status = (apply_result or {}).get("status", "success")
+                if status == "success":
+                    logger.info(f"Applied {feat_name} configuration successful.")
+                else:
+                    message = (apply_result or {}).get(
+                        "message", f"apply {feat_name} returned status: {status}"
+                    )
+                    raise RuntimeError(f"apply {feat_name} failed: {message}")
             except Exception as exec_err:
                 logger.error(f"Unexpected error when executing Optimization Item {feat_name}: {str(exec_err)}")
                 logger.warning(f"Terminating process because Optimization Item '{feat_name}' failed and triggered a rollback.")
                 try:
                     base_feature.deploy = "Y"
-                    base_feature.apply_config()
+                    rollback_result = base_feature.apply_config()
+                    if rollback_result and rollback_result.get("status") in ("error", "warning"):
+                        raise RuntimeError(
+                            rollback_result.get("message")
+                            or f"rollback {feat_name} returned status: {rollback_result.get('status')}"
+                        )
                     logger.debug("Rollback applied successfully.")
                 except Exception as rollback_err:
                     logger.error(f"Rollback applied failed. You can see you base config in {os.path.abspath(base_yaml)}")
                     raise RuntimeError(f"Failed to rollback config: {rollback_err}")
-                logger.info(
+                logger.error(
                     f"Optimization Item '{feat_name}' failed to execute, but the system has successfully rolled back. "
                     f"Subsequent Optimization Items will not be executed."
                 )
-                return
+                raise RuntimeError(f"Optimization Item '{feat_name}' application failed, system rolled back successfully.")
             logger.debug(f"Apply config Optimization Item finish: {feat_name}")
         elif deploy == "N" or deploy == "NA":
             logger.warning(f"The Optimization Item {feat_name} is not required to change.")
