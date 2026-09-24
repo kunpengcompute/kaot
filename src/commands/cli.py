@@ -20,6 +20,9 @@ import os
 import pkgutil
 import sys
 from src.commands import __path__ as commands_path
+from src.utils.log import get_logger
+
+logger = get_logger(__name__)
 
 
 def check_root_privilege():
@@ -30,12 +33,12 @@ def check_root_privilege():
     """
     geteuid = getattr(os, "geteuid", None)
     if geteuid is not None and geteuid() != 0:
-        print(
-            "ERROR: kaot must be run as root (euid=0), current euid={cdui}. "
+        logger.error(
+            "kaot must be run as root (euid=0), current euid=%s. "
             "System-level optimizations (IRQ affinity, sched_rt_runtime, hugepages, "
             "sysctl/systemctl, install) require root privileges. "
-            "Please re-run with sudo or as root.".format(cdui=geteuid()),
-            file=sys.stderr,
+            "Please re-run with sudo or as root.",
+            geteuid(),
         )
         sys.exit(1)
 
