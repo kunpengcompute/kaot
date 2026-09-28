@@ -123,7 +123,8 @@ class UpdateSchedRtRuntime(BaseFeature):
                 ["sysctl", "-p"],
                 capture_output=True,
                 text=True,
-                check=False
+                check=False,
+                timeout=30
             )
             if proc.returncode == 0:
                 logger.info("Successfully applied sysctl changes using 'sysctl -p'")

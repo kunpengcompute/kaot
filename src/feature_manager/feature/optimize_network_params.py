@@ -49,7 +49,7 @@ class OptimizeNetworkParams(BaseFeature):
             try:
                 r = subprocess.run(
                     ["sysctl", "-n", key], capture_output=True, text=True, check=False,
-                    env={**os.environ, "LANG": "C"},
+                    env={**os.environ, "LANG": "C"}, timeout=30,
                 )
                 current[key] = r.stdout.strip()
             except Exception as e:
@@ -72,7 +72,7 @@ class OptimizeNetworkParams(BaseFeature):
             try:
                 r = subprocess.run(
                     ["sysctl", "-w", f"{key}={value}"], capture_output=True, text=True, check=False,
-                    env={**os.environ, "LANG": "C"},
+                    env={**os.environ, "LANG": "C"}, timeout=30,
                 )
                 results[key] = {"returncode": r.returncode, "output": (r.stdout or r.stderr).strip()}
                 logger.info(f"sysctl -w {key}={value}: rc={r.returncode}")
@@ -89,7 +89,7 @@ class OptimizeNetworkParams(BaseFeature):
                     lines.append(f"{key} = {value}\n")
                 with open("/etc/sysctl.conf", "a") as f:
                     f.writelines(lines)
-                subprocess.run(["sysctl", "--system"], capture_output=True, text=True, check=False)
+                subprocess.run(["sysctl", "--system"], capture_output=True, text=True, check=False, timeout=30)
                 logger.info("Network params persisted to /etc/sysctl.conf")
             except Exception as e:
                 logger.error(f"Failed to persist sysctl.conf: {e}")

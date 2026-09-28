@@ -31,21 +31,57 @@ class CheckBoostKitHyperscanInstalled(BaseFeature):
     name: str = FEATURE_NAME
     boostkit_hyperscan_install_status: str = "installed"
 
+    def _find_libhs_runtime_files(self) -> list:
+        """
+        查找 libhs_runtime* 库文件。
+        优先使用 ldconfig -p 查询 linker 缓存（毫秒级），无结果时回退到限定标准库目录的 find。
+        """
+        try:
+            proc = subprocess.run(
+                ["ldconfig", "-p"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=10,
+            )
+            file_list = []
+            for line in proc.stdout.splitlines():
+                if "libhs_runtime" in line and "=>" in line:
+                    path = line.rsplit("=>", 1)[-1].strip()
+                    if path and os.path.isfile(path):
+                        file_list.append(path)
+            if file_list:
+                return file_list
+        except Exception as e:
+            logger.debug(f"ldconfig search failed: {e}")
+
+        lib_dirs = [d for d in
+                    ("/usr/lib", "/usr/lib64", "/lib", "/lib64",
+                     "/usr/local/lib", "/usr/local/lib64")
+                    if os.path.isdir(d)]
+        if not lib_dirs:
+            return []
+        try:
+            proc = subprocess.run(
+                ["find", *lib_dirs, "-type", "f", "-name", "libhs_runtime*"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=10,
+            )
+            return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+        except Exception as e:
+            logger.debug(f"find in lib dirs failed: {e}")
+            return []
+
     def get_current_config(self) -> dict:
         """
-        全局查找所有以 libhs_runtime 开头的文件，遍历这些文件，
+        查找所有以 libhs_runtime 开头的库文件，遍历这些文件，
         执行 strings + 文件路径 | grep -i "KHSEL"，如有返回则判定已安装，否则未安装。
         """
         self.deploy = "NA"
         found = False
-        # 查找所有 libhs_runtime* 文件
-        proc = subprocess.run(
-            ["find", "/", "-type", "f", "-name", "libhs_runtime*"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        file_list = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+        file_list = self._find_libhs_runtime_files()
         logger.debug(f"Found libhs_runtime files: {file_list}")
 
         for fpath in file_list:
@@ -55,6 +91,7 @@ class CheckBoostKitHyperscanInstalled(BaseFeature):
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=30,
             )
             grep_proc = subprocess.run(
                 ["grep", "-i", "KHSEL"],
@@ -62,6 +99,7 @@ class CheckBoostKitHyperscanInstalled(BaseFeature):
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=30,
             )
             if grep_proc.stdout.strip():
                 found = True
@@ -86,6 +124,7 @@ class CheckBoostKitHyperscanInstalled(BaseFeature):
             capture_output=True,
             text=True,
             check=False,
+            timeout=30,
         )
         location = ""
         for line in pip_proc.stdout.splitlines():
