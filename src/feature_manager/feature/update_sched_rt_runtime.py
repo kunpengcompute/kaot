@@ -35,19 +35,19 @@ class UpdateSchedRtRuntime(BaseFeature):
         """
         查询 /proc/sys/kernel/sched_rt_runtime_us 的当前值,
         返回 feature 的配置字典，extra field 名称为 sched_rt_runtime_us。
-        异常由调用方统一处理，不在此捕获。
+        读取失败时抛出 RuntimeError，由调用方统一处理，不在此兜底，避免生成无效的备份。
         """
         self.deploy = "NA"
 
-        proc = subprocess.run(
-            ["cat", "/proc/sys/kernel/sched_rt_runtime_us"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        value = (proc.stdout or proc.stderr or "").strip() or "unknown"
+        path = "/proc/sys/kernel/sched_rt_runtime_us"
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                self.sched_rt_runtime = int(f.read().strip())
+        except (OSError, ValueError) as e:
+            raise RuntimeError(
+                f"Failed to read current value of {path}, cannot back up: {e}"
+            ) from e
 
-        self.sched_rt_runtime = int(value)
         config = self.model_dump()
         logger.debug(f"Optimization Item {self.name} current config yaml is generated")
         return config
